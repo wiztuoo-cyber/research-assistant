@@ -139,3 +139,69 @@ export interface MessageOutboxItem {
   updated_at: string;
   sent_at: string | null;
 }
+
+
+export type DeviceStatus = 'active' | 'offline' | 'retired';
+
+export interface Device {
+  id: string;
+  name: string;
+  notes: string | null;
+  status: DeviceStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceInput {
+  name: string;
+  notes?: string | null;
+  status?: DeviceStatus;
+}
+
+export type ComputeJobStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+
+export interface ComputeJob {
+  id: string;
+  title: string;
+  project: string | null;
+  device_id: string | null;
+  device_name: string | null;
+  status: ComputeJobStatus;
+  gamma: number | null;
+  k_pcm: number | null;
+  move_rule: string | null;
+  iteration: number | null;
+  objective: number | null;
+  change_value: number | null;
+  convergence_note: string | null;
+  notes: string | null;
+  next_action: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComputeJobInput {
+  title: string;
+  project?: string | null;
+  deviceId?: string | null;
+  status?: ComputeJobStatus;
+  gamma?: number | null;
+  kPcm?: number | null;
+  moveRule?: string | null;
+  iteration?: number | null;
+  objective?: number | null;
+  changeValue?: number | null;
+  convergenceNote?: string | null;
+  notes?: string | null;
+  nextAction?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
