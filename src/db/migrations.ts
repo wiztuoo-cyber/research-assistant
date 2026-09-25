@@ -209,6 +209,64 @@ export const migrations: Migration[] = [
       create index if not exists idx_compute_job_events_job_created
         on compute_job_events(compute_job_id, created_at desc);
     `
+  },
+  {
+    id: '0004_personal_ops',
+    sql: `
+      create table if not exists schedule_items (
+        id text primary key,
+        title text not null,
+        kind text not null default 'other' check (
+          kind in ('deadline', 'interview', 'written_test', 'meeting', 'exam', 'reminder', 'other')
+        ),
+        start_at text,
+        end_at text,
+        location text,
+        status text not null default 'scheduled' check (
+          status in ('scheduled', 'completed', 'canceled')
+        ),
+        notes text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_schedule_items_start
+        on schedule_items(start_at);
+
+      create table if not exists job_applications (
+        id text primary key,
+        company text not null,
+        role text,
+        status text not null default 'wishlist' check (
+          status in ('wishlist', 'applied', 'written_test', 'interview', 'offer', 'rejected', 'withdrawn', 'closed')
+        ),
+        next_action text,
+        deadline_at text,
+        event_at text,
+        notes text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_job_applications_status
+        on job_applications(status, updated_at desc);
+
+      create table if not exists knowledge_items (
+        id text primary key,
+        kind text not null check (kind in ('sop', 'skill', 'note')),
+        title text not null,
+        category text,
+        content text,
+        tags_json text,
+        proficiency integer check (proficiency between 1 and 5 or proficiency is null),
+        status text not null default 'active' check (status in ('active', 'archived')),
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_knowledge_items_kind
+        on knowledge_items(kind, updated_at desc);
+    `
   }
 ];
 
