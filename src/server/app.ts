@@ -21,6 +21,7 @@ import {
 } from '../services/reminders.js';
 import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
+import { smartCapture } from '../services/smartCapture.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -130,6 +131,11 @@ export function createApp(db: DatabaseSync): express.Express {
   app.patch('/api/research/jobs/:id', (req, res) => {
     const job = updateComputeJob(db, req.params.id, req.body.job ?? req.body, req.body.createdBy ?? 'web');
     res.json({ job });
+  });
+
+  app.post('/api/research/smart-capture', (req, res) => {
+    const result = smartCapture(db, String(req.body.text ?? ''));
+    res.json(result);
   });
 
   app.post('/api/ai-suggestions', (req, res) => {
