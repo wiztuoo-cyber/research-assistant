@@ -333,3 +333,37 @@ small {
     grid-column: auto;
   }
 }
+
+
+.smart-capture-panel {
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.smart-capture-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.smart-capture-form textarea {
+  resize: vertical;
+}
+
+.smart-result {
+  margin-top: 10px;
+  border-left: 4px solid #1f6feb;
+  background: #eef4ff;
+  padding: 10px 12px;
+  color: #26466d;
+}
+
+@media (max-width: 760px) {
+  .smart-capture-form {
+    grid-template-columns: 1fr;
+  }
+}
