@@ -32,6 +32,31 @@ interface Device {
   status: 'active' | 'offline' | 'retired';
 }
 
+interface ScheduleItem {
+  id: string;
+  title: string;
+  kind: string;
+  start_at: string | null;
+  status: string;
+}
+
+interface JobApplication {
+  id: string;
+  company: string;
+  role: string | null;
+  status: string;
+  next_action: string | null;
+  event_at: string | null;
+}
+
+interface KnowledgeItem {
+  id: string;
+  kind: string;
+  title: string;
+  category: string | null;
+  content: string | null;
+}
+
 interface ComputeJob {
   id: string;
   title: string;
@@ -69,6 +94,9 @@ function App() {
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
   const [jobs, setJobs] = useState<ComputeJob[]>([]);
   const [input, setInput] = useState('');
   const [selectedInboxId, setSelectedInboxId] = useState<string | null>(null);
@@ -98,15 +126,19 @@ function App() {
   }, []);
 
   async function refresh() {
-    const [inbox, today, research] = await Promise.all([
+    const [inbox, today, research, personal] = await Promise.all([
       api<{ items: InboxItem[] }>('/api/inbox'),
       api<{ tasks: Task[] }>('/api/tasks/today'),
-      api<{ devices: Device[]; jobs: ComputeJob[] }>('/api/research/dashboard')
+      api<{ devices: Device[]; jobs: ComputeJob[] }>('/api/research/dashboard'),
+      api<{ schedule: ScheduleItem[]; applications: JobApplication[]; knowledge: KnowledgeItem[] }>('/api/personal/dashboard')
     ]);
     setInboxItems(inbox.items);
     setTodayTasks(today.tasks);
     setDevices(research.devices);
     setJobs(research.jobs);
+    setScheduleItems(personal.schedule);
+    setApplications(personal.applications);
+    setKnowledgeItems(personal.knowledge);
   }
 
   async function addInbox(event: React.FormEvent) {
@@ -206,7 +238,7 @@ function App() {
   async function submitSmartCapture(event: React.FormEvent) {
     event.preventDefault();
     if (!smartInput.trim()) return;
-    const response = await api<{ summary: string }>('/api/research/smart-capture', {
+    const response = await api<{ summary: string }>('/api/personal/capture', {
       method: 'POST',
       body: JSON.stringify({ text: smartInput })
     });
@@ -282,7 +314,7 @@ function App() {
           <textarea
             value={smartInput}
             onChange={(event) => setSmartInput(event.target.value)}
-            placeholder="例如：目前在工位电脑测试新Newton"
+            placeholder="例如：明天下午三点OPPO面试 / 记录一个ANSYS SOP / 工位电脑测试新Newton"
             rows={3}
           />
           <button type="submit">
@@ -291,6 +323,63 @@ function App() {
           </button>
         </form>
         {smartResult ? <div className="smart-result">{smartResult}</div> : null}
+      </section>
+
+      <section className="personal-grid">
+        <div className="panel">
+          <div className="panel-heading">
+            <ListChecks size={19} />
+            <h2>秋招进展</h2>
+          </div>
+          <ul className="simple-list stacked-list">
+            {applications.slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.company}</strong>
+                  <small>{item.role ?? '未填写岗位'} · {item.status}</small>
+                  {item.next_action ? <small>下一步：{item.next_action}</small> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {applications.length === 0 ? <p className="empty-state">暂无秋招记录。</p> : null}
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
+            <Check size={19} />
+            <h2>日程</h2>
+          </div>
+          <ul className="simple-list stacked-list">
+            {scheduleItems.slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{item.kind}{item.start_at ? ` · ${item.start_at}` : ''}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {scheduleItems.length === 0 ? <p className="empty-state">暂无日程。</p> : null}
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
+            <Sparkles size={19} />
+            <h2>SOP / 技能 / 知识</h2>
+          </div>
+          <ul className="simple-list stacked-list">
+            {knowledgeItems.slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{item.category ?? item.kind}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {knowledgeItems.length === 0 ? <p className="empty-state">暂无知识记录。</p> : null}
+        </div>
       </section>
 
       <section className="workspace research-workspace">
