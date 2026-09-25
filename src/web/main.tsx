@@ -75,6 +75,8 @@ function App() {
   const [taskTitle, setTaskTitle] = useState('');
   const [deadlineAt, setDeadlineAt] = useState('');
   const [message, setMessage] = useState('');
+  const [smartInput, setSmartInput] = useState('');
+  const [smartResult, setSmartResult] = useState('');
   const [deviceName, setDeviceName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [jobDeviceId, setJobDeviceId] = useState('');
@@ -201,6 +203,19 @@ function App() {
     await refresh();
   }
 
+  async function submitSmartCapture(event: React.FormEvent) {
+    event.preventDefault();
+    if (!smartInput.trim()) return;
+    const response = await api<{ summary: string }>('/api/research/smart-capture', {
+      method: 'POST',
+      body: JSON.stringify({ text: smartInput })
+    });
+    setSmartResult(response.summary);
+    setSmartInput('');
+    setMessage('自然语言信息已写入数据库');
+    await refresh();
+  }
+
   async function getRecommendations() {
     const response = await api<{ recommendations: Recommendation[] }>('/api/recommendations/now', {
       method: 'POST',
@@ -256,6 +271,26 @@ function App() {
           <strong>{devices.filter((item) => item.status === 'active').length}</strong>
           <span>可用设备</span>
         </div>
+      </section>
+
+      <section className="smart-capture-panel">
+        <div className="panel-heading">
+          <Sparkles size={19} />
+          <h2>直接告诉助理发生了什么</h2>
+        </div>
+        <form className="smart-capture-form" onSubmit={(event) => void submitSmartCapture(event)}>
+          <textarea
+            value={smartInput}
+            onChange={(event) => setSmartInput(event.target.value)}
+            placeholder="例如：目前在工位电脑测试新Newton"
+            rows={3}
+          />
+          <button type="submit">
+            <Sparkles size={17} />
+            智能记录
+          </button>
+        </form>
+        {smartResult ? <div className="smart-result">{smartResult}</div> : null}
       </section>
 
       <section className="workspace research-workspace">
