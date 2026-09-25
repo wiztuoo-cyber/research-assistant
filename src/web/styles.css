@@ -367,3 +367,26 @@ small {
     grid-template-columns: 1fr;
   }
 }
+
+
+.personal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stacked-list li {
+  display: block;
+}
+
+.stacked-list li > div {
+  display: grid;
+  gap: 3px;
+}
+
+@media (max-width: 980px) {
+  .personal-grid {
+    grid-template-columns: 1fr;
+  }
+}
