@@ -1,4 +1,4 @@
-import { Check, Inbox, ListChecks, Plus, Sparkles } from 'lucide-react';
+import { Check, Cpu, Inbox, ListChecks, Monitor, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -25,6 +25,30 @@ interface Recommendation {
   reasons: string[];
 }
 
+interface Device {
+  id: string;
+  name: string;
+  notes: string | null;
+  status: 'active' | 'offline' | 'retired';
+}
+
+interface ComputeJob {
+  id: string;
+  title: string;
+  project: string | null;
+  device_id: string | null;
+  device_name: string | null;
+  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled';
+  gamma: number | null;
+  k_pcm: number | null;
+  move_rule: string | null;
+  iteration: number | null;
+  objective: number | null;
+  change_value: number | null;
+  notes: string | null;
+  next_action: string | null;
+}
+
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -44,28 +68,43 @@ function App() {
   const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [jobs, setJobs] = useState<ComputeJob[]>([]);
   const [input, setInput] = useState('');
   const [selectedInboxId, setSelectedInboxId] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [deadlineAt, setDeadlineAt] = useState('');
   const [message, setMessage] = useState('');
+  const [deviceName, setDeviceName] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [jobDeviceId, setJobDeviceId] = useState('');
+  const [jobProject, setJobProject] = useState('');
+  const [jobGamma, setJobGamma] = useState('');
+  const [jobKpcm, setJobKpcm] = useState('');
+  const [jobMove, setJobMove] = useState('');
 
   const selectedInbox = useMemo(
     () => inboxItems.find((item) => item.id === selectedInboxId) ?? null,
     [inboxItems, selectedInboxId]
   );
 
+  const runningJobs = jobs.filter((job) => job.status === 'running');
+  const queuedJobs = jobs.filter((job) => job.status === 'queued');
+
   useEffect(() => {
     void refresh();
   }, []);
 
   async function refresh() {
-    const [inbox, today] = await Promise.all([
+    const [inbox, today, research] = await Promise.all([
       api<{ items: InboxItem[] }>('/api/inbox'),
-      api<{ tasks: Task[] }>('/api/tasks/today')
+      api<{ tasks: Task[] }>('/api/tasks/today'),
+      api<{ devices: Device[]; jobs: ComputeJob[] }>('/api/research/dashboard')
     ]);
     setInboxItems(inbox.items);
     setTodayTasks(today.tasks);
+    setDevices(research.devices);
+    setJobs(research.jobs);
   }
 
   async function addInbox(event: React.FormEvent) {
@@ -76,7 +115,7 @@ function App() {
       body: JSON.stringify({ rawText: input, source: 'web' })
     });
     setInput('');
-    setMessage('Captured to Inbox');
+    setMessage('已记录到 Inbox');
     await refresh();
   }
 
@@ -101,7 +140,7 @@ function App() {
     setSelectedInboxId(null);
     setTaskTitle('');
     setDeadlineAt('');
-    setMessage('Converted to task');
+    setMessage('已转换为任务');
     await refresh();
   }
 
@@ -110,7 +149,55 @@ function App() {
       method: 'POST',
       body: JSON.stringify({ createdBy: 'web' })
     });
-    setMessage('Task completed');
+    setMessage('任务已完成');
+    await refresh();
+  }
+
+  async function addDevice(event: React.FormEvent) {
+    event.preventDefault();
+    if (!deviceName.trim()) return;
+    await api('/api/research/devices', {
+      method: 'POST',
+      body: JSON.stringify({ name: deviceName })
+    });
+    setDeviceName('');
+    setMessage('设备已添加');
+    await refresh();
+  }
+
+  async function addComputeJob(event: React.FormEvent) {
+    event.preventDefault();
+    if (!jobTitle.trim()) return;
+    await api('/api/research/jobs', {
+      method: 'POST',
+      body: JSON.stringify({
+        job: {
+          title: jobTitle,
+          project: jobProject || null,
+          deviceId: jobDeviceId || null,
+          status: 'running',
+          gamma: jobGamma ? Number(jobGamma) : null,
+          kPcm: jobKpcm ? Number(jobKpcm) : null,
+          moveRule: jobMove || null
+        },
+        createdBy: 'web'
+      })
+    });
+    setJobTitle('');
+    setJobProject('');
+    setJobGamma('');
+    setJobKpcm('');
+    setJobMove('');
+    setMessage('计算任务已添加');
+    await refresh();
+  }
+
+  async function setJobStatus(jobId: string, status: ComputeJob['status']) {
+    await api(`/api/research/jobs/${jobId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ job: { status }, createdBy: 'web' })
+    });
+    setMessage(status === 'completed' ? '计算任务已完成' : '计算任务状态已更新');
     await refresh();
   }
 
@@ -121,44 +208,183 @@ function App() {
         context: {
           onCommute: false,
           hasComputer: true,
-          availableMinutes: 45,
-          currentLocation: 'home'
+          availableMinutes: 45
         }
       })
     });
     setRecommendations(response.recommendations.slice(0, 5));
   }
 
+  function jobMeta(job: ComputeJob): string {
+    const parts = [];
+    if (job.gamma !== null) parts.push(`γ=${job.gamma}`);
+    if (job.k_pcm !== null) parts.push(`k_PCM=${job.k_pcm}`);
+    if (job.move_rule) parts.push(`move=${job.move_rule}`);
+    if (job.iteration !== null) parts.push(`iter=${job.iteration}`);
+    if (job.objective !== null) parts.push(`obj=${job.objective}`);
+    return parts.join(' · ') || '暂无参数';
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <h1>AI Task Manager</h1>
-          <p>Local-first task capture and planning</p>
+          <h1>科研私人助理</h1>
+          <p>本地 SQLite 记录任务、设备与计算状态</p>
         </div>
-        <button className="icon-button" type="button" onClick={() => void refresh()} title="Refresh">
-          <ListChecks size={18} />
+        <button className="icon-button" type="button" onClick={() => void refresh()} title="刷新">
+          <RefreshCw size={18} />
         </button>
       </header>
 
       {message ? <div className="status-line">{message}</div> : null}
 
-      <section className="workspace">
+      <section className="summary-grid">
+        <div className="summary-card">
+          <strong>{runningJobs.length}</strong>
+          <span>正在计算</span>
+        </div>
+        <div className="summary-card">
+          <strong>{queuedJobs.length}</strong>
+          <span>等待运行</span>
+        </div>
+        <div className="summary-card">
+          <strong>{todayTasks.length}</strong>
+          <span>今日任务</span>
+        </div>
+        <div className="summary-card">
+          <strong>{devices.filter((item) => item.status === 'active').length}</strong>
+          <span>可用设备</span>
+        </div>
+      </section>
+
+      <section className="workspace research-workspace">
+        <div className="panel wide-panel">
+          <div className="panel-heading">
+            <Cpu size={19} />
+            <h2>当前计算</h2>
+          </div>
+          <div className="compute-grid">
+            {devices.map((device) => {
+              const deviceJobs = runningJobs.filter((job) => job.device_id === device.id);
+              return (
+                <div className="device-card" key={device.id}>
+                  <div className="device-title">
+                    <Monitor size={17} />
+                    <strong>{device.name}</strong>
+                  </div>
+                  {deviceJobs.length ? (
+                    deviceJobs.map((job) => (
+                      <div className="job-card" key={job.id}>
+                        <strong>{job.title}</strong>
+                        <small>{job.project ?? '未设置项目'}</small>
+                        <small>{jobMeta(job)}</small>
+                        <div className="job-actions">
+                          <button type="button" onClick={() => void setJobStatus(job.id, 'completed')}>
+                            <Check size={15} />
+                            完成
+                          </button>
+                          <button className="secondary-button" type="button" onClick={() => void setJobStatus(job.id, 'paused')}>
+                            暂停
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="empty-state">当前空闲</p>
+                  )}
+                </div>
+              );
+            })}
+            {devices.length === 0 ? <p className="empty-state">先添加你的工作站、宿舍电脑等设备。</p> : null}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
+            <Monitor size={19} />
+            <h2>设备</h2>
+          </div>
+          <form className="capture-form" onSubmit={(event) => void addDevice(event)}>
+            <input
+              value={deviceName}
+              onChange={(event) => setDeviceName(event.target.value)}
+              placeholder="例如：工作站"
+            />
+            <button type="submit">
+              <Plus size={17} />
+              添加设备
+            </button>
+          </form>
+          <ul className="simple-list">
+            {devices.map((device) => (
+              <li key={device.id}>
+                <span>{device.name}</span>
+                <small>{device.status}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
+            <Cpu size={19} />
+            <h2>新增计算任务</h2>
+          </div>
+          <form className="process-form" onSubmit={(event) => void addComputeJob(event)}>
+            <label>
+              名称
+              <input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="例如：γ=0.5 基准算例" />
+            </label>
+            <label>
+              项目
+              <input value={jobProject} onChange={(event) => setJobProject(event.target.value)} placeholder="例如：Cu/Al 双材料 TO" />
+            </label>
+            <label>
+              设备
+              <select value={jobDeviceId} onChange={(event) => setJobDeviceId(event.target.value)}>
+                <option value="">未指定</option>
+                {devices.map((device) => (
+                  <option key={device.id} value={device.id}>{device.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="inline-fields">
+              <label>
+                γ
+                <input value={jobGamma} onChange={(event) => setJobGamma(event.target.value)} placeholder="0.5" />
+              </label>
+              <label>
+                k_PCM
+                <input value={jobKpcm} onChange={(event) => setJobKpcm(event.target.value)} placeholder="0.1" />
+              </label>
+            </div>
+            <label>
+              move
+              <input value={jobMove} onChange={(event) => setJobMove(event.target.value)} placeholder="0.15×0.98^loop" />
+            </label>
+            <button type="submit">
+              <Plus size={17} />
+              开始记录
+            </button>
+          </form>
+        </div>
+
         <div className="panel inbox-panel">
           <div className="panel-heading">
             <Inbox size={19} />
-            <h2>Inbox</h2>
+            <h2>快速记录</h2>
           </div>
           <form className="capture-form" onSubmit={(event) => void addInbox(event)}>
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Type a thought, task, reminder, or unfinished idea"
+              placeholder="先把事情记下来，例如：周日之前确认所有 gamma 结果"
               rows={3}
             />
             <button type="submit">
               <Plus size={17} />
-              Add
+              记录
             </button>
           </form>
           <ul className="inbox-list">
@@ -183,16 +409,16 @@ function App() {
         <div className="panel">
           <div className="panel-heading">
             <Check size={19} />
-            <h2>Process</h2>
+            <h2>转为任务</h2>
           </div>
           {selectedInbox ? (
             <form className="process-form" onSubmit={(event) => void convertSelected(event)}>
               <label>
-                Task title
+                任务标题
                 <input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
               </label>
               <label>
-                Deadline / reminder
+                截止时间 / 提醒
                 <input
                   type="datetime-local"
                   value={deadlineAt}
@@ -201,48 +427,43 @@ function App() {
               </label>
               <button type="submit">
                 <Check size={17} />
-                Convert
+                转换
               </button>
             </form>
           ) : (
-            <p className="empty-state">Select an Inbox item to process.</p>
+            <p className="empty-state">选择一条快速记录后再转换。</p>
           )}
         </div>
 
         <div className="panel">
           <div className="panel-heading">
             <ListChecks size={19} />
-            <h2>Today</h2>
+            <h2>今日任务</h2>
           </div>
           <ul className="task-list">
             {todayTasks.map((task) => (
               <li key={task.id}>
                 <div>
                   <strong>{task.title}</strong>
-                  <small>{task.deadline_at ?? 'No deadline'}</small>
+                  <small>{task.deadline_at ?? '无截止时间'}</small>
                 </div>
-                <button
-                  className="icon-button"
-                  type="button"
-                  title="Complete"
-                  onClick={() => void completeTask(task.id)}
-                >
+                <button className="icon-button" type="button" title="完成" onClick={() => void completeTask(task.id)}>
                   <Check size={17} />
                 </button>
               </li>
             ))}
           </ul>
-          {todayTasks.length === 0 ? <p className="empty-state">No active deadlines for today.</p> : null}
+          {todayTasks.length === 0 ? <p className="empty-state">今天暂无明确任务。</p> : null}
         </div>
 
         <div className="panel">
           <div className="panel-heading">
             <Sparkles size={19} />
-            <h2>Recommend</h2>
+            <h2>下一步建议</h2>
           </div>
           <button type="button" onClick={() => void getRecommendations()}>
             <Sparkles size={17} />
-            What should I do now?
+            我现在应该做什么？
           </button>
           <ul className="recommendation-list">
             {recommendations.map((item) => (
