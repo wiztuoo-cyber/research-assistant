@@ -22,6 +22,7 @@ import {
 import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
+import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -136,6 +137,25 @@ export function createApp(db: DatabaseSync): express.Express {
   app.post('/api/research/smart-capture', (req, res) => {
     const result = smartCapture(db, String(req.body.text ?? ''));
     res.json(result);
+  });
+
+  app.get('/api/personal/dashboard', (_req, res) => {
+    res.json(personalDashboard(db));
+  });
+
+  app.post('/api/personal/schedule', (req, res) => {
+    const item = createScheduleItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
+  });
+
+  app.post('/api/personal/applications', (req, res) => {
+    const application = createJobApplication(db, req.body.application ?? req.body);
+    res.status(201).json({ application });
+  });
+
+  app.post('/api/personal/knowledge', (req, res) => {
+    const item = createKnowledgeItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
   });
 
   app.post('/api/ai-suggestions', (req, res) => {
