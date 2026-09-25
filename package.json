@@ -1,17 +1,17 @@
 {
-  "name": "ai-task-manager",
+  "name": "research-assistant",
   "version": "0.1.0",
   "private": false,
-  "description": "Local-first AI-friendly personal task manager with SQLite, CLI, API, and web UI.",
+  "description": "Local-first AI-friendly research task and computation manager.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bonnieFanjing/ai-task-manager.git"
+    "url": "git+https://github.com/wiztuoo-cyber/research-assistant.git"
   },
   "bugs": {
-    "url": "https://github.com/bonnieFanjing/ai-task-manager/issues"
+    "url": "https://github.com/wiztuoo-cyber/research-assistant/issues"
   },
-  "homepage": "https://github.com/bonnieFanjing/ai-task-manager#readme",
+  "homepage": "https://github.com/wiztuoo-cyber/research-assistant#readme",
   "engines": {
     "node": ">=22.5.0"
   },
