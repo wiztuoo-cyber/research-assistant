@@ -23,6 +23,7 @@ import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '..
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
+import { unifiedCapture } from '../services/unifiedCapture.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -156,6 +157,11 @@ export function createApp(db: DatabaseSync): express.Express {
   app.post('/api/personal/knowledge', (req, res) => {
     const item = createKnowledgeItem(db, req.body.item ?? req.body);
     res.status(201).json({ item });
+  });
+
+  app.post('/api/personal/capture', (req, res) => {
+    const result = unifiedCapture(db, String(req.body.text ?? ''));
+    res.json(result);
   });
 
   app.post('/api/ai-suggestions', (req, res) => {
