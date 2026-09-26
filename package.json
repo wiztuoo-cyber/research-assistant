@@ -1,33 +1,33 @@
 {
-  "name": "ai-task-manager",
+  "name": "research-assistant",
   "version": "0.1.0",
   "private": false,
-  "description": "Local-first AI-friendly personal task manager with SQLite, CLI, API, and web UI.",
+  "description": "Local-first AI-friendly research task and computation manager.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bonnieFanjing/ai-task-manager.git"
+    "url": "git+https://github.com/wiztuoo-cyber/research-assistant.git"
   },
   "bugs": {
-    "url": "https://github.com/bonnieFanjing/ai-task-manager/issues"
+    "url": "https://github.com/wiztuoo-cyber/research-assistant/issues"
   },
-  "homepage": "https://github.com/bonnieFanjing/ai-task-manager#readme",
+  "homepage": "https://github.com/wiztuoo-cyber/research-assistant#readme",
   "engines": {
     "node": ">=22.5.0"
   },
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "NODE_NO_WARNINGS=1 tsx watch src/server/index.ts",
+    "dev:api": "tsx watch src/server/index.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.server.json && vite build",
     "lint": "tsc -p tsconfig.check.json --noEmit",
-    "test": "NODE_NO_WARNINGS=1 vitest run",
-    "test:watch": "NODE_NO_WARNINGS=1 vitest",
-    "test:e2e": "NODE_NO_WARNINGS=1 playwright test",
-    "db:migrate": "NODE_NO_WARNINGS=1 tsx src/db/migrate.ts",
-    "db:check": "NODE_NO_WARNINGS=1 tsx src/db/check.ts",
-    "task": "NODE_NO_WARNINGS=1 tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:check": "tsx src/db/check.ts",
+    "task": "tsx src/cli.ts",
     "ai:scan": "scripts/ai-scan-reminders.sh",
     "ai:scan:reminders": "AI_SCAN_SYNC_REMINDERS=1 scripts/ai-scan-reminders.sh",
     "ai:scan:install": "scripts/install-ai-scan-launchd.sh",

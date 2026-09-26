@@ -154,6 +154,119 @@ export const migrations: Migration[] = [
       create index if not exists idx_message_outbox_task
         on message_outbox(task_id);
     `
+  },
+  {
+    id: '0003_research_compute_jobs',
+    sql: `
+      create table if not exists devices (
+        id text primary key,
+        name text not null unique,
+        notes text,
+        status text not null default 'active' check (status in ('active', 'offline', 'retired')),
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create table if not exists compute_jobs (
+        id text primary key,
+        title text not null,
+        project text,
+        device_id text references devices(id) on delete set null,
+        status text not null default 'queued' check (
+          status in ('queued', 'running', 'paused', 'completed', 'failed', 'canceled')
+        ),
+        gamma real,
+        k_pcm real,
+        move_rule text,
+        iteration integer,
+        objective real,
+        change_value real,
+        convergence_note text,
+        notes text,
+        next_action text,
+        started_at text,
+        completed_at text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_compute_jobs_status_updated
+        on compute_jobs(status, updated_at desc);
+
+      create index if not exists idx_compute_jobs_device_status
+        on compute_jobs(device_id, status);
+
+      create table if not exists compute_job_events (
+        id text primary key,
+        compute_job_id text not null references compute_jobs(id) on delete cascade,
+        event_type text not null,
+        old_value_json text,
+        new_value_json text,
+        created_by text not null,
+        created_at text not null
+      );
+
+      create index if not exists idx_compute_job_events_job_created
+        on compute_job_events(compute_job_id, created_at desc);
+    `
+  },
+  {
+    id: '0004_personal_ops',
+    sql: `
+      create table if not exists schedule_items (
+        id text primary key,
+        title text not null,
+        kind text not null default 'other' check (
+          kind in ('deadline', 'interview', 'written_test', 'meeting', 'exam', 'reminder', 'other')
+        ),
+        start_at text,
+        end_at text,
+        location text,
+        status text not null default 'scheduled' check (
+          status in ('scheduled', 'completed', 'canceled')
+        ),
+        notes text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_schedule_items_start
+        on schedule_items(start_at);
+
+      create table if not exists job_applications (
+        id text primary key,
+        company text not null,
+        role text,
+        status text not null default 'wishlist' check (
+          status in ('wishlist', 'applied', 'written_test', 'interview', 'offer', 'rejected', 'withdrawn', 'closed')
+        ),
+        next_action text,
+        deadline_at text,
+        event_at text,
+        notes text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_job_applications_status
+        on job_applications(status, updated_at desc);
+
+      create table if not exists knowledge_items (
+        id text primary key,
+        kind text not null check (kind in ('sop', 'skill', 'note')),
+        title text not null,
+        category text,
+        content text,
+        tags_json text,
+        proficiency integer check (proficiency between 1 and 5 or proficiency is null),
+        status text not null default 'active' check (status in ('active', 'archived')),
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_knowledge_items_kind
+        on knowledge_items(kind, updated_at desc);
+    `
   }
 ];
 

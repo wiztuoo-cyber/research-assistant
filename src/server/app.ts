@@ -20,6 +20,10 @@ import {
   syncTaskReminder
 } from '../services/reminders.js';
 import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '../services/tasks.js';
+import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
+import { smartCapture } from '../services/smartCapture.js';
+import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
+import { unifiedCapture } from '../services/unifiedCapture.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -98,6 +102,66 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.post('/api/recommendations/now', (req, res) => {
     res.json({ recommendations: recommendNow(db, req.body.context ?? {}) });
+  });
+
+  app.get('/api/research/dashboard', (_req, res) => {
+    res.json(researchDashboard(db));
+  });
+
+  app.get('/api/research/devices', (_req, res) => {
+    res.json({ devices: listDevices(db) });
+  });
+
+  app.post('/api/research/devices', (req, res) => {
+    const device = createDevice(db, {
+      name: String(req.body.name ?? ''),
+      notes: req.body.notes ?? null,
+      status: req.body.status
+    });
+    res.status(201).json({ device });
+  });
+
+  app.get('/api/research/jobs', (_req, res) => {
+    res.json({ jobs: listComputeJobs(db) });
+  });
+
+  app.post('/api/research/jobs', (req, res) => {
+    const job = createComputeJob(db, req.body.job ?? req.body, req.body.createdBy ?? 'web');
+    res.status(201).json({ job });
+  });
+
+  app.patch('/api/research/jobs/:id', (req, res) => {
+    const job = updateComputeJob(db, req.params.id, req.body.job ?? req.body, req.body.createdBy ?? 'web');
+    res.json({ job });
+  });
+
+  app.post('/api/research/smart-capture', (req, res) => {
+    const result = smartCapture(db, String(req.body.text ?? ''));
+    res.json(result);
+  });
+
+  app.get('/api/personal/dashboard', (_req, res) => {
+    res.json(personalDashboard(db));
+  });
+
+  app.post('/api/personal/schedule', (req, res) => {
+    const item = createScheduleItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
+  });
+
+  app.post('/api/personal/applications', (req, res) => {
+    const application = createJobApplication(db, req.body.application ?? req.body);
+    res.status(201).json({ application });
+  });
+
+  app.post('/api/personal/knowledge', (req, res) => {
+    const item = createKnowledgeItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
+  });
+
+  app.post('/api/personal/capture', (req, res) => {
+    const result = unifiedCapture(db, String(req.body.text ?? ''));
+    res.json(result);
   });
 
   app.post('/api/ai-suggestions', (req, res) => {
