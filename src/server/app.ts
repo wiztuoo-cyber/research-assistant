@@ -25,7 +25,7 @@ import { smartCapture } from '../services/smartCapture.js';
 import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard, updateKnowledgeItem } from '../services/personalOps.js';
 import { unifiedCapture } from '../services/unifiedCapture.js';
 import { aiCapture } from '../services/aiCapture.js';
-import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted } from '../services/taskDetails.js';
+import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted, updateTaskPointContent, updateTaskStepTitle } from '../services/taskDetails.js';
 import { getAiSettingsStatus, saveAiSettings } from '../services/settings.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -147,6 +147,10 @@ export function createApp(db: DatabaseSync): express.Express {
   });
 
   app.patch('/api/tasks/steps/:stepId', (req, res) => {
+    if (typeof req.body.title === 'string') {
+      res.json({ step: updateTaskStepTitle(db, req.params.stepId, req.body.title) });
+      return;
+    }
     res.json({ step: setTaskStepCompleted(db, req.params.stepId, Boolean(req.body.completed)) });
   });
 
@@ -157,6 +161,10 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.post('/api/tasks/:id/points', (req, res) => {
     res.status(201).json({ point: addTaskPoint(db, req.params.id, String(req.body.content ?? '')) });
+  });
+
+  app.patch('/api/tasks/points/:pointId', (req, res) => {
+    res.json({ point: updateTaskPointContent(db, req.params.pointId, String(req.body.content ?? '')) });
   });
 
   app.delete('/api/tasks/points/:pointId', (req, res) => {
