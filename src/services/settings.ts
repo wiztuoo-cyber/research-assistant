@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const envPath = () => resolve(process.cwd(), '.env');
+const envPath = () => process.env.SETTINGS_FILE_PATH ? resolve(process.env.SETTINGS_FILE_PATH) : resolve(process.cwd(), '.env');
 
 function readEnvLines(): string[] {
   const path = envPath();
