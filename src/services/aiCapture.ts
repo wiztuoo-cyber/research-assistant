@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { createTask, listPlanningTasks, trashTask, updateTaskFields } from './tasks.js';
+import { completeTask, createTask, listPlanningTasks, trashTask, updateTaskFields } from './tasks.js';
 import { addTaskPoint, addTaskStep, setTaskStarred } from './taskDetails.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem } from './personalOps.js';
 import { unifiedCapture, type UnifiedCaptureResult } from './unifiedCapture.js';
@@ -80,6 +80,12 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
 
   for (const action of actions) {
     if (action.type === 'update_task') {
+      if (action.status === 'completed') {
+        const completed = completeTask(db, action.task_id, 'deepseek');
+        if (action.starred !== undefined) setTaskStarred(db, action.task_id, action.starred);
+        saved.push(completed);
+        continue;
+      }
       const updated = updateTaskFields(db, action.task_id, {
         title: action.title,
         status: action.status,
