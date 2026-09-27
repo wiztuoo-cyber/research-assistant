@@ -19,13 +19,13 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, restoreTask, trashTask } from '../services/tasks.js';
+import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
-import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
+import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard, updateKnowledgeItem } from '../services/personalOps.js';
 import { unifiedCapture } from '../services/unifiedCapture.js';
 import { aiCapture } from '../services/aiCapture.js';
-import { addTaskPoint, addTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted } from '../services/taskDetails.js';
+import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted } from '../services/taskDetails.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -121,6 +121,11 @@ export function createApp(db: DatabaseSync): express.Express {
     res.json({ tasks: listCompletedTasks(db, Number.isFinite(limit) ? limit : 100) });
   });
 
+  app.get('/api/tasks/trash', (req, res) => {
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    res.json({ tasks: listTrashedTasks(db, Number.isFinite(limit) ? limit : 100) });
+  });
+
   app.get('/api/tasks/:id/details', (req, res) => {
     res.json(getTaskDetails(db, req.params.id));
   });
@@ -133,8 +138,18 @@ export function createApp(db: DatabaseSync): express.Express {
     res.json({ step: setTaskStepCompleted(db, req.params.stepId, Boolean(req.body.completed)) });
   });
 
+  app.delete('/api/tasks/steps/:stepId', (req, res) => {
+    deleteTaskStep(db, req.params.stepId);
+    res.json({ ok: true });
+  });
+
   app.post('/api/tasks/:id/points', (req, res) => {
     res.status(201).json({ point: addTaskPoint(db, req.params.id, String(req.body.content ?? '')) });
+  });
+
+  app.delete('/api/tasks/points/:pointId', (req, res) => {
+    deleteTaskPoint(db, req.params.pointId);
+    res.json({ ok: true });
   });
 
   app.patch('/api/tasks/:id/star', (req, res) => {
@@ -199,6 +214,16 @@ export function createApp(db: DatabaseSync): express.Express {
   app.post('/api/personal/knowledge', (req, res) => {
     const item = createKnowledgeItem(db, req.body.item ?? req.body);
     res.status(201).json({ item });
+  });
+
+  app.patch('/api/personal/knowledge/:id', (req, res) => {
+    const item = updateKnowledgeItem(db, req.params.id, req.body.item ?? req.body);
+    res.json({ item });
+  });
+
+  app.delete('/api/personal/knowledge/:id', (req, res) => {
+    const item = archiveKnowledgeItem(db, req.params.id);
+    res.json({ item });
   });
 
   app.post('/api/personal/capture', asyncHandler(async (req, res) => {
