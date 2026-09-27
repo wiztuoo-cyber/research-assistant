@@ -35,7 +35,7 @@
     "message:dispatch:install": "scripts/install-message-dispatch-launchd.sh",
     "desktop:dev": "npm run build && electron .",
     "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:win": "npm run build && electron-builder --win nsis"
+    "desktop:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
