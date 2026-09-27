@@ -50,6 +50,7 @@ export interface Task {
   updated_at: string;
   completed_at: string | null;
   deleted_at: string | null;
+  starred: boolean;
   requires_computer?: number;
   requires_phone?: number;
   requires_internet?: number;
