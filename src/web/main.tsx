@@ -149,7 +149,12 @@ function WeekPlanner() {
   }), [tasks]);
 
   function tasksForDay(key: string) {
-    return tasks.filter((task) => task.start_at?.slice(0, 10) === key).sort((a,b) => (a.start_at ?? '').localeCompare(b.start_at ?? ''));
+    return tasks.filter((task) => task.start_at?.slice(0, 10) === key).sort((a,b) => {
+      const aTimed = Boolean(a.start_at && a.start_at.length > 10);
+      const bTimed = Boolean(b.start_at && b.start_at.length > 10);
+      if (aTimed !== bTimed) return aTimed ? -1 : 1;
+      return (a.start_at ?? '').localeCompare(b.start_at ?? '');
+    });
   }
 
   function dayLabelForTask(task: Task): string | null {
@@ -179,7 +184,10 @@ function WeekPlanner() {
   }
 
   async function planTask(taskId: string, date: string | null) {
-    await api('/api/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify({ createdBy: 'week-planner', task: { startAt: date } }) });
+    const current = tasks.find((task) => task.id === taskId);
+    const timeSuffix = current?.start_at && current.start_at.length > 10 ? current.start_at.slice(10) : '';
+    const nextStart = date ? date + timeSuffix : null;
+    await api('/api/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify({ createdBy: 'week-planner', task: { startAt: nextStart } }) });
     await refreshPlanner();
     if (selectedTask?.task.id === taskId) await openPlannerTask(taskId);
   }
