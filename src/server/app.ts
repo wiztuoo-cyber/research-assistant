@@ -292,7 +292,7 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   });
 
   app.post('/api/personal/capture', asyncHandler(async (req, res) => {
-    const result = await aiCapture(db, String(req.body.text ?? ''));
+    const result = await aiCapture(db, String(req.body.text ?? ''), { forcedStartAt: req.body.forcedStartAt ?? null });
     res.json(result);
   }));
 
