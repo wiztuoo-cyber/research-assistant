@@ -26,6 +26,7 @@ import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, create
 import { unifiedCapture } from '../services/unifiedCapture.js';
 import { aiCapture } from '../services/aiCapture.js';
 import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted } from '../services/taskDetails.js';
+import { getAiSettingsStatus, saveAiSettings } from '../services/settings.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -61,6 +62,17 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get('/api/settings/ai', (_req, res) => {
+    res.json(getAiSettingsStatus());
+  });
+
+  app.post('/api/settings/ai', (req, res) => {
+    res.json(saveAiSettings({
+      apiKey: req.body.apiKey,
+      model: req.body.model
+    }));
   });
 
   app.post('/api/inbox', (req, res) => {
