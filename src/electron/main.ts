@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage, screen } from 'electron';
 import express from 'express';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,6 +19,7 @@ let db: DatabaseSync | null = null;
 let quitting = false;
 const firedReminders = new Set<string>();
 let reminderTimer: NodeJS.Timeout | null = null;
+const reminderWindows = new Set<BrowserWindow>();
 
 function reminderStatePath(): string {
   return join(app.getPath('userData'), 'fired-reminders.json');
@@ -37,8 +38,53 @@ function saveFiredReminders(): void {
   } catch {}
 }
 
+function showReminderPopup(title: string): void {
+  const display = screen.getPrimaryDisplay();
+  const work = display.workArea;
+  const width = 360;
+  const height = 118;
+  const offset = Math.min(reminderWindows.size, 4) * (height + 10);
+  const popup = new BrowserWindow({
+    width,
+    height,
+    x: work.x + work.width - width - 18,
+    y: work.y + work.height - height - 18 - offset,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    hasShadow: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  reminderWindows.add(popup);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{margin:0;background:transparent;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+    .card{margin:8px;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.97);border:1px solid rgba(220,226,235,.95);box-shadow:0 16px 40px rgba(31,41,55,.16)}
+    .cap{font-size:11px;color:#7b8494;margin-bottom:6px}
+    .title{font-size:15px;line-height:1.45;color:#253248;font-weight:650;word-break:break-word}
+  </style></head><body><div class="card"><div class="cap">私人助理提醒</div><div class="title">${title.replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch] ?? ch))}</div></div></body></html>`;
+  void popup.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  popup.once('ready-to-show', () => popup.showInactive());
+  const closeTimer = setTimeout(() => {
+    if (!popup.isDestroyed()) popup.destroy();
+  }, 9000);
+  popup.on('closed', () => {
+    clearTimeout(closeTimer);
+    reminderWindows.delete(popup);
+  });
+}
+
 function checkWindowsReminders(): void {
-  if (!db || !Notification.isSupported()) return;
+  if (!db) return;
   const now = Date.now();
   const rows = db.prepare(`
     select id, title, reminder_at
@@ -57,13 +103,7 @@ function checkWindowsReminders(): void {
     firedReminders.add(key);
     saveFiredReminders();
 
-    const notice = new Notification({
-      title: '私人助理',
-      body: row.title,
-      silent: false
-    });
-    notice.on('click', showWindow);
-    notice.show();
+    showReminderPopup(row.title);
   }
 }
 
@@ -160,7 +200,16 @@ async function startLocalServer(): Promise<number> {
     setWidgetOpacity: (opacity) => {
       if (plannerWindow && !plannerWindow.isDestroyed()) plannerWindow.setOpacity(opacity);
     },
-    getWidgetOpacity: () => plannerWindow && !plannerWindow.isDestroyed() ? plannerWindow.getOpacity() : 1
+    getWidgetOpacity: () => plannerWindow && !plannerWindow.isDestroyed() ? plannerWindow.getOpacity() : 1,
+    getWidgetBounds: () => plannerWindow && !plannerWindow.isDestroyed()
+      ? { width: plannerWindow.getBounds().width, height: plannerWindow.getBounds().height }
+      : null,
+    resizeWidget: (width, height) => {
+      if (plannerWindow && !plannerWindow.isDestroyed()) {
+        plannerWindow.setSize(width, height, true);
+        saveWidgetBounds();
+      }
+    }
   });
   const webRoot = join(app.getAppPath(), 'dist');
 
@@ -329,6 +378,7 @@ if (!gotLock) {
     if (reminderTimer) clearInterval(reminderTimer);
     server?.close();
     plannerWindow?.destroy();
+    for (const popup of reminderWindows) if (!popup.isDestroyed()) popup.destroy();
     db?.close();
   });
 }
