@@ -38,7 +38,9 @@ export async function aiCapture(db: DatabaseSync, text: string, options: { force
     id: task.id,
     title: task.title,
     status: task.status,
+    start_at: task.start_at,
     deadline_at: task.deadline_at,
+    reminder_at: task.reminder_at,
     starred: task.starred
   }));
   const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -67,6 +69,11 @@ add_point字段：task_id,content。
 task字段：title,status(today/next/scheduled/waiting/someday),priority(low/medium/high),start_at(计划执行时间，ISO或YYYY-MM-DD或null),deadline_at(截止时间，ISO或null),reminder_at(提醒时间，带本地时区偏移的ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。计划执行时间、截止时间、提醒时间是三个独立概念，不能互相替代。有明确计划执行日期时填写start_at。用户明确说“提醒我”时必须填写reminder_at；例如今晚20:00应转换为包含当前本地时区偏移的完整ISO时间。
 steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
+时间字段语义必须严格区分：
+- “安排到/挪到/推迟到/改到某天做/准备某天做”表示计划执行时间，填写 start_at，不要修改 deadline_at。
+- “截止/最晚/DDL/必须在某时前完成”才填写 deadline_at。
+- “提醒我/到点叫我”才填写 reminder_at。
+修改已有任务时，只修改用户明确要求变化的字段；没有提到的状态、截止时间、提醒时间等必须保持不变。
 schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
 job用于秋招进展，字段company,role,status(wishlist/applied/written_test/interview/offer/rejected/withdrawn/closed),next_action,deadline_at,event_at,notes。
 knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,category,content。
