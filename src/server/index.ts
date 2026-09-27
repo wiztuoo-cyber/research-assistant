@@ -1,6 +1,9 @@
+import { loadLocalEnv } from '../config/env.js';
 import { openDatabase } from '../db/connection.js';
 import { runMigrations } from '../db/migrations.js';
 import { createApp } from './app.js';
+
+loadLocalEnv();
 
 const port = Number(process.env.PORT ?? 4010);
 const db = openDatabase();
