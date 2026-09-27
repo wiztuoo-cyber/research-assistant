@@ -424,6 +424,7 @@ small {
 .task-main-button {
   border: 0;
   background: transparent;
+  color: #202124;
   text-align: left;
   padding: 0;
   display: grid;
@@ -598,4 +599,10 @@ small {
   white-space: pre-wrap;
   line-height: 1.7;
   color: #343a40;
+}
+
+
+.task-main-button:hover {
+  background: transparent;
+  color: #202124;
 }
