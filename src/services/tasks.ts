@@ -417,3 +417,60 @@ export function listCompletedTasks(db: DatabaseSync, limit = 100): Task[] {
     .all(limit)
     .map((row) => toTask(row as Row));
 }
+
+
+export function trashTask(db: DatabaseSync, taskId: string, createdBy = 'api', at = nowIso()): Task {
+  return withTransaction(db, () => {
+    const oldTask = getTask(db, taskId);
+    if (!oldTask) throw new Error(`Task not found: ${taskId}`);
+
+    db.prepare(
+      `
+        update tasks
+        set status = 'trash', deleted_at = ?, updated_at = ?
+        where id = ?
+      `
+    ).run(at, at, taskId);
+
+    recordTaskEvent(db, {
+      taskId,
+      eventType: 'trashed',
+      oldValue: { status: oldTask.status, deleted_at: oldTask.deleted_at },
+      newValue: { status: 'trash', deleted_at: at },
+      createdBy,
+      at
+    });
+
+    const task = getTask(db, taskId);
+    if (!task) throw new Error(`Task not found after trash: ${taskId}`);
+    return task;
+  });
+}
+
+export function restoreTask(db: DatabaseSync, taskId: string, status: TaskStatus = 'next', createdBy = 'api', at = nowIso()): Task {
+  return withTransaction(db, () => {
+    const oldTask = getTask(db, taskId);
+    if (!oldTask) throw new Error(`Task not found: ${taskId}`);
+
+    db.prepare(
+      `
+        update tasks
+        set status = ?, deleted_at = null, completed_at = null, updated_at = ?
+        where id = ?
+      `
+    ).run(status, at, taskId);
+
+    recordTaskEvent(db, {
+      taskId,
+      eventType: 'restored',
+      oldValue: { status: oldTask.status, deleted_at: oldTask.deleted_at },
+      newValue: { status, deleted_at: null },
+      createdBy,
+      at
+    });
+
+    const task = getTask(db, taskId);
+    if (!task) throw new Error(`Task not found after restore: ${taskId}`);
+    return task;
+  });
+}
