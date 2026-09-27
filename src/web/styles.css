@@ -546,3 +546,56 @@ small {
   width: 100%;
   margin-top: 28px;
 }
+
+
+.compact-bucket {
+  min-height: 120px;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #1f6feb;
+  padding: 0;
+  min-height: auto;
+  justify-content: flex-start;
+}
+
+.link-button:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.knowledge-row {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.knowledge-row:hover {
+  background: transparent;
+}
+
+.history-entry {
+  margin-top: 6px;
+  padding: 8px 0 16px;
+}
+
+.completed-panel {
+  margin-top: 10px;
+  background: #fff;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.knowledge-content {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: #343a40;
+}
