@@ -364,3 +364,36 @@ export function listCompletedAiDelegatedTasksSince(db: DatabaseSync, since: stri
     .all(since)
     .map((row) => toTask(row as Row));
 }
+
+
+export function listPlanningTasks(db: DatabaseSync): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.deleted_at is null
+          and tasks.status in ('today', 'next', 'waiting', 'someday')
+        order by
+          case tasks.status
+            when 'today' then 0
+            when 'next' then 1
+            when 'waiting' then 2
+            when 'someday' then 3
+            else 4
+          end,
+          case tasks.priority
+            when 'high' then 0
+            when 'medium' then 1
+            else 2
+          end,
+          tasks.importance desc,
+          tasks.urgency desc,
+          coalesce(tasks.deadline_at, '9999-12-31') asc,
+          tasks.created_at asc
+      `
+    )
+    .all()
+    .map((row) => toTask(row as Row));
+}
