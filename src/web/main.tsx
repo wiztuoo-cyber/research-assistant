@@ -71,6 +71,232 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+
+function dateOnlyLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function startOfWeekMonday(now = new Date()): Date {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekday = d.getDay() || 7;
+  d.setDate(d.getDate() - weekday + 1);
+  return d;
+}
+
+function WeekPlanner() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [input, setInput] = useState('');
+  const [aiEnabled, setAiEnabled] = useState(() => localStorage.getItem('week-planner-ai') === '1');
+  const [message, setMessage] = useState('');
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    void refreshPlanner();
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('week-planner-ai', aiEnabled ? '1' : '0');
+  }, [aiEnabled]);
+
+  async function refreshPlanner() {
+    const result = await api<{ tasks: Task[] }>('/api/tasks/planning');
+    setTasks(result.tasks);
+  }
+
+  const weekDays = useMemo(() => {
+    const monday = startOfWeekMonday(now);
+    return Array.from({ length: 7 }, (_, index) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + index);
+      return {
+        date: d,
+        key: dateOnlyLocal(d),
+        weekday: ['周一','周二','周三','周四','周五','周六','周日'][index]
+      };
+    });
+  }, [now]);
+
+  const weekKeys = useMemo(() => new Set(weekDays.map((d) => d.key)), [weekDays]);
+
+  const unscheduled = useMemo(
+    () => tasks.filter((task) => !task.deadline_at || !weekKeys.has(task.deadline_at.slice(0, 10))),
+    [tasks, weekKeys]
+  );
+
+  function tasksForDay(key: string) {
+    return tasks.filter((task) => task.deadline_at?.slice(0, 10) === key);
+  }
+
+  async function addTask(text: string, date?: string) {
+    const value = text.trim();
+    if (!value) return;
+
+    try {
+      if (aiEnabled) {
+        const aiText = date ? `${value}。安排在 ${date}。` : value;
+        const result = await api<{ summary: string }>('/api/personal/capture', {
+          method: 'POST',
+          body: JSON.stringify({ text: aiText })
+        });
+        setMessage(result.summary);
+      } else {
+        await api('/api/tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            createdBy: 'week-planner',
+            task: {
+              title: value,
+              status: date ? 'scheduled' : 'next',
+              priority: 'medium',
+              deadlineAt: date ?? null
+            }
+          })
+        });
+        setMessage(date ? '已加入当天计划' : '已加入所有任务');
+      }
+      setInput('');
+      await refreshPlanner();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function quickAddForDay(day: { key: string; weekday: string }) {
+    const value = window.prompt(`${day.weekday} · ${day.key}\n输入任务`);
+    if (value?.trim()) void addTask(value, day.key);
+  }
+
+  async function moveTask(taskId: string, date: string | null) {
+    await api(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        createdBy: 'week-planner',
+        task: {
+          status: date ? 'scheduled' : 'next',
+          deadlineAt: date
+        }
+      })
+    });
+    await refreshPlanner();
+  }
+
+  function dragStart(event: React.DragEvent, taskId: string) {
+    event.dataTransfer.setData('text/task-id', taskId);
+    event.dataTransfer.effectAllowed = 'move';
+  }
+
+  function allowDrop(event: React.DragEvent) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  function dropOnDate(event: React.DragEvent, date: string | null) {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData('text/task-id');
+    if (taskId) void moveTask(taskId, date);
+  }
+
+  async function completePlannerTask(taskId: string) {
+    await api(`/api/tasks/${taskId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ createdBy: 'week-planner' })
+    });
+    await refreshPlanner();
+  }
+
+  const todayKey = dateOnlyLocal(now);
+  const clock = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(now);
+
+  function plannerTask(task: Task) {
+    return (
+      <div className="planner-task" key={task.id} draggable onDragStart={(e) => dragStart(e, task.id)}>
+        <button className="planner-check" type="button" title="完成" onClick={() => void completePlannerTask(task.id)}>
+          <Check size={13}/>
+        </button>
+        <span>{task.starred ? '★ ' : ''}{task.title}</span>
+      </div>
+    );
+  }
+
+  return (
+    <main className="week-planner-shell">
+      <header className="week-planner-header">
+        <div className="planner-brand">
+          <strong>私人助理</strong>
+          <span>{clock}</span>
+        </div>
+        <form className="planner-capture" onSubmit={(e) => { e.preventDefault(); void addTask(input); }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="输入一个任务……" />
+          <button type="submit">添加</button>
+        </form>
+        <label className="ai-toggle">
+          <span>AI</span>
+          <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} />
+          <span className="toggle-track"><span /></span>
+          <small>{aiEnabled ? '开' : '关'}</small>
+        </label>
+      </header>
+
+      {message ? <div className="planner-message">{message}</div> : null}
+
+      <section className="planner-board">
+        <aside className="planner-all"
+          onDragOver={allowDrop}
+          onDrop={(e) => dropOnDate(e, null)}>
+          <div className="planner-section-title">
+            <strong>所有任务</strong>
+            <span>{unscheduled.length}</span>
+          </div>
+          <div className="planner-task-stack">
+            {unscheduled.map(plannerTask)}
+            {!unscheduled.length ? <p className="planner-empty">暂无未安排任务</p> : null}
+          </div>
+        </aside>
+
+        <section className="planner-week">
+          <div className="planner-section-title">
+            <strong>本周</strong>
+            <span>{weekDays[0].key.slice(5)} — {weekDays[6].key.slice(5)}</span>
+          </div>
+          <div className="planner-days">
+            {weekDays.map((day) => {
+              const dayTasks = tasksForDay(day.key);
+              const isToday = day.key === todayKey;
+              return (
+                <div
+                  key={day.key}
+                  className={isToday ? 'planner-day today' : 'planner-day'}
+                  onDoubleClick={() => quickAddForDay(day)}
+                  onDragOver={allowDrop}
+                  onDrop={(e) => dropOnDate(e, day.key)}
+                  title="双击添加任务；可把任务拖到这里"
+                >
+                  <div className="planner-day-head">
+                    <strong>{day.weekday}</strong>
+                    <span>{day.key.slice(5).replace('-', '/')}</span>
+                    {isToday ? <em>今天</em> : null}
+                  </div>
+                  <div className="planner-day-tasks">
+                    {dayTasks.map(plannerTask)}
+                    {!dayTasks.length ? <span className="planner-day-hint">双击添加</span> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -508,4 +734,5 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+const isWeekPlanner = new URLSearchParams(window.location.search).get('view') === 'week';
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <WeekPlanner /> : <App />}</React.StrictMode>);
