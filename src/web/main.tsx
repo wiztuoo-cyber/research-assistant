@@ -188,6 +188,20 @@ function App() {
     if (selectedTask) await openTask(selectedTask.task.id);
   }
 
+  async function editStep(step: TaskStep) {
+    const next = window.prompt('修改子任务', step.title);
+    if (!next || next.trim() === step.title) return;
+    await api(`/api/tasks/steps/${step.id}`, { method: 'PATCH', body: JSON.stringify({ title: next.trim() }) });
+    if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
+  async function editPoint(point: TaskPoint) {
+    const next = window.prompt('修改要点', point.content);
+    if (!next || next.trim() === point.content) return;
+    await api(`/api/tasks/points/${point.id}`, { method: 'PATCH', body: JSON.stringify({ content: next.trim() }) });
+    if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
   async function deleteStep(stepId: string) {
     await api(`/api/tasks/steps/${stepId}`, { method: 'DELETE' });
     if (selectedTask) await openTask(selectedTask.task.id);
@@ -454,7 +468,7 @@ function App() {
                       <button className="step-check" type="button" onClick={() => void toggleStep(step)}>
                         {step.completed ? <Check size={15}/> : <span className="empty-check" />}
                       </button>
-                      <span className={step.completed ? 'completed-text' : ''}>{step.title}</span>
+                      <button className="detail-text-button" type="button" title="点击修改" onClick={() => void editStep(step)}><span className={step.completed ? 'completed-text' : ''}>{step.title}</span></button>
                       <button className="tiny-delete" type="button" title="删除子任务" onClick={() => void deleteStep(step.id)}><X size={14}/></button>
                     </li>
                   ))}
@@ -470,7 +484,7 @@ function App() {
               <h3>要点</h3>
               {selectedTask.points.length ? (
                 <ul className="point-list">
-                  {selectedTask.points.map((point) => <li key={point.id}><span>{point.content}</span><button className="tiny-delete" type="button" title="删除要点" onClick={() => void deletePoint(point.id)}><X size={14}/></button></li>)}
+                  {selectedTask.points.map((point) => <li key={point.id}><button className="detail-text-button" type="button" title="点击修改" onClick={() => void editPoint(point)}><span>{point.content}</span></button><button className="tiny-delete" type="button" title="删除要点" onClick={() => void deletePoint(point.id)}><X size={14}/></button></li>)}
                 </ul>
               ) : <p className="empty-state">暂无要点。</p>}
               <div className="quick-add-row">
