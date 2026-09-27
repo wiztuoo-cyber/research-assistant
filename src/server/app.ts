@@ -19,7 +19,7 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '../services/tasks.js';
+import { completeTask, convertInboxToTask, createTask, listPlanningTasks, listTodayTasks } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
@@ -98,6 +98,10 @@ export function createApp(db: DatabaseSync): express.Express {
   app.get('/api/tasks/today', (req, res) => {
     const now = typeof req.query.now === 'string' ? req.query.now : undefined;
     res.json({ tasks: listTodayTasks(db, now) });
+  });
+
+  app.get('/api/tasks/planning', (_req, res) => {
+    res.json({ tasks: listPlanningTasks(db) });
   });
 
   app.post('/api/recommendations/now', (req, res) => {
