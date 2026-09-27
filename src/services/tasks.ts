@@ -474,3 +474,20 @@ export function restoreTask(db: DatabaseSync, taskId: string, status: TaskStatus
     return task;
   });
 }
+
+
+export function listTrashedTasks(db: DatabaseSync, limit = 100): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.status = 'trash'
+        order by tasks.deleted_at desc, tasks.updated_at desc
+        limit ?
+      `
+    )
+    .all(limit)
+    .map((row) => toTask(row as Row));
+}
