@@ -693,3 +693,21 @@ small {
 .settings-drawer label {
   margin-top: 14px;
 }
+
+
+.detail-text-button {
+  flex: 1;
+  min-height: auto;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  color: #202124;
+  padding: 0;
+  text-align: left;
+}
+
+.detail-text-button:hover {
+  background: transparent;
+  color: #202124;
+  text-decoration: underline;
+}
