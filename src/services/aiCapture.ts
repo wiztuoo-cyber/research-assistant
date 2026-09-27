@@ -92,6 +92,7 @@ steps只放“需要逐项完成”的子任务；points只放“重要提醒/�
 - “截止/最晚/DDL/必须在某时前完成”才填写 deadline_at。
 - “提醒我/到点叫我”才填写 reminder_at。
 修改已有任务时，只修改用户明确要求变化的字段；没有提到的状态、截止时间、提醒时间等必须保持不变。
+如果用户说“提醒我做某事/到点提醒我做某事”，必须创建或更新 task，不要创建 schedule；若没有另外指定计划执行时间，则 start_at 与 reminder_at 使用同一时间。
 schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
 job用于秋招进展，字段company,role,status(wishlist/applied/written_test/interview/offer/rejected/withdrawn/closed),next_action,deadline_at,event_at,notes。
 knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,category,content。
@@ -128,7 +129,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority,
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : undefined,
         urgency: action.status === 'today' ? 5 : action.status ? 3 : undefined,
-        startAt: options.forcedStartAt ?? action.start_at,
+        startAt: options.forcedStartAt ?? action.start_at ?? action.reminder_at,
         deadlineAt: action.deadline_at,
         reminderAt: action.reminder_at,
         notes: action.notes
@@ -148,7 +149,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority ?? 'medium',
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : 3,
         urgency: action.status === 'today' ? 5 : 3,
-        startAt: options.forcedStartAt ?? action.start_at ?? null,
+        startAt: options.forcedStartAt ?? action.start_at ?? action.reminder_at ?? null,
         deadlineAt: action.deadline_at ?? null,
         reminderAt: action.reminder_at ?? null,
         notes: action.notes ?? null
