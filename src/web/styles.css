@@ -1326,3 +1326,59 @@ small {
     grid-template-rows: repeat(7, minmax(88px, auto));
   }
 }
+
+.planner-inline-add {
+  width: min(280px, 100%);
+  margin: 1px 0;
+}
+
+.planner-inline-add input {
+  min-height: 34px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font-size: 11px;
+  border-color: #b8c8f5;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 0 0 3px rgba(59,109,242,.08);
+}
+
+.planner-resize-handle {
+  position: fixed;
+  right: 3px;
+  bottom: 3px;
+  width: 22px;
+  height: 22px;
+  z-index: 2500;
+  cursor: nwse-resize;
+  -webkit-app-region: no-drag;
+  touch-action: none;
+  opacity: .36;
+}
+
+.planner-resize-handle::before,
+.planner-resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  border-right: 2px solid #758198;
+  border-bottom: 2px solid #758198;
+  border-radius: 1px;
+}
+
+.planner-resize-handle::before {
+  width: 12px;
+  height: 12px;
+}
+
+.planner-resize-handle::after {
+  width: 6px;
+  height: 6px;
+  right: 8px;
+  bottom: 8px;
+}
+
+.planner-resize-handle:hover,
+.planner-resize-handle.active {
+  opacity: .82;
+}
