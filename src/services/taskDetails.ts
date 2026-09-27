@@ -84,3 +84,18 @@ export function deleteTaskStep(db: DatabaseSync, stepId: string): void {
 export function deleteTaskPoint(db: DatabaseSync, pointId: string): void {
   db.prepare('delete from task_points where id=?').run(pointId);
 }
+
+
+export function updateTaskStepTitle(db: DatabaseSync, stepId: string, title: string, at=nowIso()): TaskStep {
+  db.prepare('update task_steps set title=?, updated_at=? where id=?').run(title.trim(), at, stepId);
+  const row=db.prepare('select * from task_steps where id=?').get(stepId) as any;
+  if(!row) throw new Error('Step not found.');
+  return {id:String(row.id),task_id:String(row.task_id),title:String(row.title),completed:Number(row.completed)===1,position:Number(row.position)};
+}
+
+export function updateTaskPointContent(db: DatabaseSync, pointId: string, content: string, at=nowIso()): TaskPoint {
+  db.prepare('update task_points set content=?, updated_at=? where id=?').run(content.trim(), at, pointId);
+  const row=db.prepare('select * from task_points where id=?').get(pointId) as any;
+  if(!row) throw new Error('Point not found.');
+  return {id:String(row.id),task_id:String(row.task_id),content:String(row.content),position:Number(row.position)};
+}
