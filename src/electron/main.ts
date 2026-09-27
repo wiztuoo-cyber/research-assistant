@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, nativeImage, screen } from 'electron';
 import express from 'express';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
@@ -60,6 +60,26 @@ function trayImage() {
   ).resize({ width: 18, height: 18 });
 }
 
+function widgetStatePath(): string {
+  return join(app.getPath('userData'), 'widget-window.json');
+}
+
+function readWidgetBounds(): Partial<{ x:number; y:number; width:number; height:number }> {
+  try {
+    return JSON.parse(readFileSync(widgetStatePath(), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveWidgetBounds(): void {
+  if (!plannerWindow || plannerWindow.isDestroyed()) return;
+  try {
+    const bounds = plannerWindow.getBounds();
+    writeFileSync(widgetStatePath(), JSON.stringify(bounds), 'utf8');
+  } catch {}
+}
+
 function showWindow(): void {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -78,21 +98,25 @@ function showPlanner(): void {
 function createPlannerWindow(url: string): void {
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
-  const width = Math.min(980, Math.max(760, Math.round(work.width * 0.72)));
-  const height = Math.min(760, Math.max(600, Math.round(work.height * 0.78)));
+  const saved = readWidgetBounds();
+  const width = saved.width ?? Math.min(980, Math.max(760, Math.round(work.width * 0.72)));
+  const height = saved.height ?? Math.min(760, Math.max(600, Math.round(work.height * 0.78)));
 
   plannerWindow = new BrowserWindow({
     width,
     height,
-    x: work.x + Math.max(0, work.width - width - 18),
-    y: work.y + 18,
+    x: saved.x ?? work.x + Math.max(0, work.width - width - 18),
+    y: saved.y ?? work.y + 18,
     minWidth: 720,
     minHeight: 560,
     title: '私人助理 · 本周计划',
-    backgroundColor: '#eef2f7',
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
     autoHideMenuBar: true,
     skipTaskbar: true,
     alwaysOnTop: false,
+    hasShadow: true,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -103,6 +127,8 @@ function createPlannerWindow(url: string): void {
 
   void plannerWindow.loadURL(`${url}?view=week`);
   plannerWindow.once('ready-to-show', () => plannerWindow?.showInactive());
+  plannerWindow.on('move', saveWidgetBounds);
+  plannerWindow.on('resize', saveWidgetBounds);
   plannerWindow.on('close', (event) => {
     if (!quitting) {
       event.preventDefault();
@@ -112,7 +138,12 @@ function createPlannerWindow(url: string): void {
 }
 
 async function startLocalServer(): Promise<number> {
-  const web = createApp(db!);
+  const web = createApp(db!, {
+    setWidgetOpacity: (opacity) => {
+      if (plannerWindow && !plannerWindow.isDestroyed()) plannerWindow.setOpacity(opacity);
+    },
+    getWidgetOpacity: () => plannerWindow && !plannerWindow.isDestroyed() ? plannerWindow.getOpacity() : 1
+  });
   const webRoot = join(app.getAppPath(), 'dist');
 
   if (!existsSync(join(webRoot, 'index.html'))) {
