@@ -374,11 +374,12 @@ export function listPlanningTasks(db: DatabaseSync): Task[] {
         from tasks
         left join task_requirements on task_requirements.task_id = tasks.id
         where tasks.deleted_at is null
-          and tasks.status in ('today', 'next', 'waiting', 'someday')
+          and tasks.status in ('today', 'next', 'scheduled', 'waiting', 'someday')
         order by
           case tasks.status
             when 'today' then 0
             when 'next' then 1
+            when 'scheduled' then 1
             when 'waiting' then 2
             when 'someday' then 3
             else 4
