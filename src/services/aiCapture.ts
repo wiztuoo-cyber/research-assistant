@@ -5,8 +5,8 @@ import { createJobApplication, createKnowledgeItem, createScheduleItem } from '.
 import { unifiedCapture, type UnifiedCaptureResult } from './unifiedCapture.js';
 
 type AiAction =
-  | { type: 'task'; title: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; reminder_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
-  | { type: 'update_task'; task_id: string; title?: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'|'completed'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; reminder_at?: string|null; notes?: string|null; starred?: boolean }
+  | { type: 'task'; title: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; start_at?: string|null; deadline_at?: string|null; reminder_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
+  | { type: 'update_task'; task_id: string; title?: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'|'completed'; priority?: 'low'|'medium'|'high'; start_at?: string|null; deadline_at?: string|null; reminder_at?: string|null; notes?: string|null; starred?: boolean }
   | { type: 'delete_task'; task_id: string }
   | { type: 'add_step'; task_id: string; title: string }
   | { type: 'add_point'; task_id: string; content: string }
@@ -29,7 +29,7 @@ function stripFence(s: string): string {
   return s.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
 }
 
-export async function aiCapture(db: DatabaseSync, text: string): Promise<UnifiedCaptureResult & { provider: string }> {
+export async function aiCapture(db: DatabaseSync, text: string, options: { forcedStartAt?: string | null } = {}): Promise<UnifiedCaptureResult & { provider: string }> {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) return { ...unifiedCapture(db, text), provider: 'local' };
 
@@ -58,13 +58,13 @@ JSON格式：{"actions":[...],"summary":"简短确认"}。
 action type只能是task/update_task/delete_task/add_step/add_point/schedule/job/knowledge。
 如果用户是在延期、修改、完成、等待、删除一个已经存在的任务，必须操作已有任务，不要新建重复任务。
 当前已有任务会附在用户消息后面。
-update_task字段：task_id,title,status(today/next/scheduled/waiting/someday/completed),priority,deadline_at,reminder_at,notes,starred。
+update_task字段：task_id,title,status(today/next/scheduled/waiting/someday/completed),priority,start_at,deadline_at,reminder_at,notes,starred。start_at是计划执行时间；deadline_at是截止时间；二者不能混用。
 delete_task字段：task_id。
 add_step字段：task_id,title。
 add_point字段：task_id,content。
 如果用户说“这两个任务”“上面的任务”“今天这两个”等，要根据已有任务列表匹配对应task_id并分别生成动作。
 如果用户只说“明天”“后天”而没有具体时刻，deadline_at只写YYYY-MM-DD，不要擅自添加09:00。
-task字段：title,status(today/next/scheduled/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),reminder_at(带本地时区偏移的ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。有明确日期但不属于“今天”的计划任务可用scheduled。用户明确说“提醒我”时必须填写reminder_at；例如今晚20:00应转换为包含当前本地时区偏移的完整ISO时间。
+task字段：title,status(today/next/scheduled/waiting/someday),priority(low/medium/high),start_at(计划执行时间，ISO或YYYY-MM-DD或null),deadline_at(截止时间，ISO或null),reminder_at(提醒时间，带本地时区偏移的ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。计划执行时间、截止时间、提醒时间是三个独立概念，不能互相替代。有明确计划执行日期时填写start_at。用户明确说“提醒我”时必须填写reminder_at；例如今晚20:00应转换为包含当前本地时区偏移的完整ISO时间。
 steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
 schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
@@ -103,6 +103,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority,
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : undefined,
         urgency: action.status === 'today' ? 5 : action.status ? 3 : undefined,
+        startAt: options.forcedStartAt ?? action.start_at,
         deadlineAt: action.deadline_at,
         reminderAt: action.reminder_at,
         notes: action.notes
@@ -122,6 +123,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority ?? 'medium',
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : 3,
         urgency: action.status === 'today' ? 5 : 3,
+        startAt: options.forcedStartAt ?? action.start_at ?? null,
         deadlineAt: action.deadline_at ?? null,
         reminderAt: action.reminder_at ?? null,
         notes: action.notes ?? null
