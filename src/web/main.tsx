@@ -101,6 +101,9 @@ function WeekPlanner() {
   const [message, setMessage] = useState('');
   const [now, setNow] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<TaskDetailsResponse | null>(null);
+  const [inlineDay, setInlineDay] = useState<string | null>(null);
+  const [inlineValue, setInlineValue] = useState('');
+  const [resizing, setResizing] = useState(false);
 
   useEffect(() => {
     void refreshPlanner();
@@ -179,8 +182,48 @@ function WeekPlanner() {
   }
 
   function quickAddForDay(day: { key: string; weekday: string }) {
-    const value = window.prompt(day.weekday + ' · ' + day.key + '\n输入任务');
-    if (value?.trim()) void addTask(value, day.key);
+    setInlineDay(day.key);
+    setInlineValue('');
+  }
+
+  async function submitInlineDay(day: string) {
+    const value = inlineValue.trim();
+    if (!value) {
+      setInlineDay(null);
+      return;
+    }
+    await addTask(value, day);
+    setInlineValue('');
+    setInlineDay(null);
+  }
+
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = window.innerWidth;
+    const startHeight = window.innerHeight;
+    setResizing(true);
+
+    const move = (moveEvent: PointerEvent) => {
+      const width = Math.max(560, startWidth + moveEvent.clientX - startX);
+      const height = Math.max(420, startHeight + moveEvent.clientY - startY);
+      void fetch('/api/desktop/widget/resize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ width, height })
+      }).catch(() => {});
+    };
+
+    const up = () => {
+      setResizing(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
   }
 
   async function planTask(taskId: string, date: string | null) {
@@ -253,12 +296,23 @@ function WeekPlanner() {
               const dayTasks = tasksForDay(day.key); const isToday = day.key === todayKey;
               return <div key={day.key} className={isToday ? 'planner-day today' : 'planner-day'} onDoubleClick={() => quickAddForDay(day)} onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, day.key)}>
                 <div className='planner-day-head'><strong>{day.weekday}</strong><span>{day.key.slice(5).replace('-', '/')}</span>{isToday ? <em>今天</em> : null}</div>
-                <div className='planner-day-tasks'>{dayTasks.map((task) => plannerTask(task, true))}{!dayTasks.length ? <span className='planner-day-hint'>双击添加</span> : null}</div>
+                <div className='planner-day-tasks'>
+                  {dayTasks.map((task) => plannerTask(task, true))}
+                  {inlineDay === day.key ? (
+                    <form className='planner-inline-add' onSubmit={(e) => { e.preventDefault(); void submitInlineDay(day.key); }} onDoubleClick={(e) => e.stopPropagation()}>
+                      <input autoFocus value={inlineValue} onChange={(e) => setInlineValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') { setInlineDay(null); setInlineValue(''); } }}
+                        onBlur={() => { if (!inlineValue.trim()) setInlineDay(null); }}
+                        placeholder='输入任务，Enter 保存' />
+                    </form>
+                  ) : !dayTasks.length ? <span className='planner-day-hint'>双击添加</span> : null}
+                </div>
               </div>;
             })}
           </div>
         </section>
       </section>
+      <div className={resizing ? 'planner-resize-handle active' : 'planner-resize-handle'} onPointerDown={startResize} title='拖动调整挂件大小' />
       {selectedTask ? <div className='planner-detail-backdrop' onClick={() => setSelectedTask(null)}>
         <aside className='planner-detail' onClick={(e) => e.stopPropagation()}>
           <div className='planner-detail-head'><div><small>任务详情</small><h3>{selectedTask.task.starred ? '★ ' : ''}{selectedTask.task.title}</h3></div><button type='button' className='planner-detail-close' onClick={() => setSelectedTask(null)}><X size={17}/></button></div>
