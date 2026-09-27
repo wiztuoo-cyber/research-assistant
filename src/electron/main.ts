@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, nativeImage, screen } from 'electron';
 import express from 'express';
 import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +17,37 @@ let tray: Tray | null = null;
 let server: Server | null = null;
 let db: DatabaseSync | null = null;
 let quitting = false;
+const firedReminders = new Set<string>();
+let reminderTimer: NodeJS.Timeout | null = null;
+
+function checkWindowsReminders(): void {
+  if (!db || !Notification.isSupported()) return;
+  const now = Date.now();
+  const rows = db.prepare(`
+    select id, title, reminder_at
+    from tasks
+    where deleted_at is null
+      and status not in ('completed','canceled','trash')
+      and reminder_at is not null
+      and trim(reminder_at) != ''
+  `).all() as Array<{id:string;title:string;reminder_at:string}>;
+
+  for (const row of rows) {
+    const due = new Date(row.reminder_at).getTime();
+    if (!Number.isFinite(due) || due > now) continue;
+    const key = `${row.id}|${row.reminder_at}`;
+    if (firedReminders.has(key)) continue;
+    firedReminders.add(key);
+
+    const notice = new Notification({
+      title: '私人助理',
+      body: row.title,
+      silent: false
+    });
+    notice.on('click', showWindow);
+    notice.show();
+  }
+}
 
 function trayImage() {
   const svg = `
@@ -45,7 +76,7 @@ function showPlanner(): void {
 }
 
 function createPlannerWindow(url: string): void {
-  const display = require('electron').screen.getPrimaryDisplay();
+  const display = screen.getPrimaryDisplay();
   const work = display.workArea;
   const width = Math.min(980, Math.max(760, Math.round(work.width * 0.72)));
   const height = Math.min(760, Math.max(600, Math.round(work.height * 0.78)));
@@ -172,7 +203,7 @@ function createTray(): void {
       }
     }
   ]));
-  tray.on('double-click', showWindow);
+  tray.on('double-click', showPlanner);
 }
 
 function createWindow(url: string): void {
@@ -212,6 +243,7 @@ if (!gotLock) {
     process.env.TASK_DB_PATH = join(userData, 'tasks.sqlite');
     process.env.SETTINGS_FILE_PATH = join(userData, 'settings.env');
 
+    app.setAppUserModelId('com.local.personalassistant');
     loadLocalEnv();
 
     db = openDatabase();
@@ -226,10 +258,14 @@ if (!gotLock) {
     const port = await startLocalServer();
     localBaseUrl = `http://127.0.0.1:${port}`;
     createWindow(localBaseUrl);
+    mainWindow?.hide();
     createPlannerWindow(localBaseUrl);
     createTray();
 
-    globalShortcut.register('CommandOrControl+Alt+A', showWindow);
+    reminderTimer = setInterval(checkWindowsReminders, 30000);
+    checkWindowsReminders();
+
+    globalShortcut.register('CommandOrControl+Alt+A', showPlanner);
   });
 
   app.on('activate', showWindow);
@@ -240,6 +276,7 @@ if (!gotLock) {
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
+    if (reminderTimer) clearInterval(reminderTimer);
     server?.close();
     plannerWindow?.destroy();
     db?.close();
