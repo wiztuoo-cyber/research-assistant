@@ -19,7 +19,7 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listPlanningTasks, listTodayTasks } from '../services/tasks.js';
+import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
@@ -104,6 +104,11 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.get('/api/tasks/planning', (_req, res) => {
     res.json({ tasks: listPlanningTasks(db) });
+  });
+
+  app.get('/api/tasks/completed', (req, res) => {
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    res.json({ tasks: listCompletedTasks(db, Number.isFinite(limit) ? limit : 100) });
   });
 
   app.get('/api/tasks/:id/details', (req, res) => {
