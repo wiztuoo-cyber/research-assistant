@@ -62,13 +62,14 @@ export function setTaskStarred(db: DatabaseSync, taskId: string, starred: boolea
 }
 
 export function getTaskDetails(db: DatabaseSync, taskId: string) {
-  const row = db.prepare('select id,title,notes,status,priority,importance,urgency,deadline_at,starred from tasks where id=?').get(taskId) as Row | undefined;
+  const row = db.prepare('select id,title,notes,status,priority,importance,urgency,start_at,deadline_at,reminder_at,starred from tasks where id=?').get(taskId) as Row | undefined;
   if(!row) throw new Error('Task not found.');
   return {
     task: {
       id:String(row.id), title:String(row.title), notes: row.notes==null?null:String(row.notes),
       status:String(row.status), priority:String(row.priority), importance:Number(row.importance),
-      urgency:Number(row.urgency), deadline_at: row.deadline_at==null?null:String(row.deadline_at),
+      urgency:Number(row.urgency), start_at: row.start_at==null?null:String(row.start_at),
+      deadline_at: row.deadline_at==null?null:String(row.deadline_at), reminder_at: row.reminder_at==null?null:String(row.reminder_at),
       starred:Number(row.starred)===1
     },
     steps:listTaskSteps(db,taskId),
