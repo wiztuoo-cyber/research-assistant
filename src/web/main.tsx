@@ -1,4 +1,4 @@
-import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles, Star, X, Plus } from 'lucide-react';
+import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles, Star, X, Plus, Trash2, RotateCcw, Settings, Save } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -77,9 +77,17 @@ function App() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
+  const [trashedTasks, setTrashedTasks] = useState<Task[]>([]);
   const [showLongTerm, setShowLongTerm] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const [selectedKnowledge, setSelectedKnowledge] = useState<KnowledgeItem | null>(null);
+  const [knowledgeTitle, setKnowledgeTitle] = useState('');
+  const [knowledgeContent, setKnowledgeContent] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [aiModel, setAiModel] = useState('deepseek-flash');
+  const [aiConfigured, setAiConfigured] = useState(false);
   const [smartInput, setSmartInput] = useState('');
   const [smartResult, setSmartResult] = useState('');
   const [message, setMessage] = useState('');
@@ -90,20 +98,31 @@ function App() {
   useEffect(() => { void refresh(); }, []);
 
   async function refresh() {
-    const [planning, personal, completed] = await Promise.all([
+    const [planning, personal, completed, trashed, settings] = await Promise.all([
       api<{ tasks: Task[] }>('/api/tasks/planning'),
       api<{ schedule: ScheduleItem[]; applications: JobApplication[]; knowledge: KnowledgeItem[] }>('/api/personal/dashboard'),
-      api<{ tasks: Task[] }>('/api/tasks/completed?limit=50')
+      api<{ tasks: Task[] }>('/api/tasks/completed?limit=50'),
+      api<{ tasks: Task[] }>('/api/tasks/trash?limit=50'),
+      api<{ configured: boolean; model: string }>('/api/settings/ai')
     ]);
     setTasks(planning.tasks);
     setScheduleItems(personal.schedule);
     setApplications(personal.applications);
     setKnowledgeItems(personal.knowledge);
     setCompletedTasks(completed.tasks);
+    setTrashedTasks(trashed.tasks);
+    setAiConfigured(settings.configured);
+    setAiModel(settings.model);
   }
 
   async function openTask(taskId: string) {
     setSelectedTask(await api<TaskDetailsResponse>(`/api/tasks/${taskId}/details`));
+  }
+
+  function openKnowledge(item: KnowledgeItem) {
+    setSelectedKnowledge(item);
+    setKnowledgeTitle(item.title);
+    setKnowledgeContent(item.content ?? '');
   }
 
   async function submitSmartCapture(event: React.FormEvent) {
@@ -121,6 +140,19 @@ function App() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  async function trashTask(taskId: string) {
+    await api(`/api/tasks/${taskId}/trash`, { method: 'POST', body: JSON.stringify({ createdBy: 'web' }) });
+    if (selectedTask?.task.id === taskId) setSelectedTask(null);
+    setMessage('任务已移到回收站');
+    await refresh();
+  }
+
+  async function restoreTask(taskId: string) {
+    await api(`/api/tasks/${taskId}/restore`, { method: 'POST', body: JSON.stringify({ status: 'next', createdBy: 'web' }) });
+    setMessage('任务已恢复到本周 / 近期');
+    await refresh();
   }
 
   async function completeTask(taskId: string) {
@@ -154,6 +186,46 @@ function App() {
       method: 'PATCH', body: JSON.stringify({ completed: !step.completed })
     });
     if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
+  async function deleteStep(stepId: string) {
+    await api(`/api/tasks/steps/${stepId}`, { method: 'DELETE' });
+    if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
+  async function deletePoint(pointId: string) {
+    await api(`/api/tasks/points/${pointId}`, { method: 'DELETE' });
+    if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
+  async function saveKnowledge() {
+    if (!selectedKnowledge) return;
+    const response = await api<{ item: KnowledgeItem }>(`/api/personal/knowledge/${selectedKnowledge.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ item: { title: knowledgeTitle, content: knowledgeContent } })
+    });
+    setSelectedKnowledge(response.item);
+    setMessage('SOP / 知识已保存');
+    await refresh();
+  }
+
+  async function deleteKnowledge() {
+    if (!selectedKnowledge) return;
+    await api(`/api/personal/knowledge/${selectedKnowledge.id}`, { method: 'DELETE' });
+    setSelectedKnowledge(null);
+    setMessage('SOP / 知识已归档');
+    await refresh();
+  }
+
+  async function saveAiSettings() {
+    const response = await api<{ configured: boolean; model: string }>('/api/settings/ai', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey: apiKeyInput || undefined, model: aiModel })
+    });
+    setAiConfigured(response.configured);
+    setAiModel(response.model);
+    setApiKeyInput('');
+    setMessage(response.configured ? 'DeepSeek 已配置' : '仍使用本地解析');
   }
 
   async function addPoint() {
@@ -201,7 +273,11 @@ function App() {
           <h1>私人助理</h1>
           <p>日程、秋招、待办与 SOP 都保存在本地 SQLite</p>
         </div>
-        <button className="icon-button" type="button" onClick={() => void refresh()} title="刷新"><RefreshCw size={18} /></button>
+        <div className="top-actions">
+          <span className={aiConfigured ? 'ai-status connected' : 'ai-status'}>{aiConfigured ? 'DeepSeek 已连接' : '本地模式'}</span>
+          <button className="icon-button" type="button" onClick={() => setShowSettings(true)} title="设置"><Settings size={18} /></button>
+          <button className="icon-button" type="button" onClick={() => void refresh()} title="刷新"><RefreshCw size={18} /></button>
+        </div>
       </header>
 
       {message ? <div className="status-line">{message}</div> : null}
@@ -265,7 +341,7 @@ function App() {
           <ul className="simple-list stacked-list">
             {knowledgeItems.slice(0, 10).map((item) => (
               <li key={item.id}>
-                <button className="knowledge-row" type="button" onClick={() => setSelectedKnowledge(item)}>
+                <button className="knowledge-row" type="button" onClick={() => openKnowledge(item)}>
                   <strong>{item.title}</strong>
                   <small>{item.category ?? item.kind}</small>
                 </button>
@@ -293,6 +369,44 @@ function App() {
         ) : null}
       </section>
 
+      <section className="history-entry">
+        <button className="link-button" type="button" onClick={() => setShowTrash(!showTrash)}>
+          回收站 {trashedTasks.length} 项 {showTrash ? '收起' : '>'}
+        </button>
+        {showTrash ? (
+          <div className="completed-panel">
+            {trashedTasks.length ? (
+              <ul className="simple-list stacked-list">
+                {trashedTasks.map((task) => (
+                  <li key={task.id} className="restore-row">
+                    <div><strong>{task.title}</strong><small>已删除</small></div>
+                    <button className="secondary-icon-button" type="button" title="恢复" onClick={() => void restoreTask(task.id)}><RotateCcw size={16}/></button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="empty-state">回收站为空。</p>}
+          </div>
+        ) : null}
+      </section>
+
+      {showSettings ? (
+        <div className="drawer-backdrop" onClick={() => setShowSettings(false)}>
+          <aside className="task-drawer settings-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="drawer-header">
+              <h2>设置</h2>
+              <button className="icon-button" type="button" onClick={() => setShowSettings(false)}><X size={18}/></button>
+            </div>
+            <section className="drawer-section">
+              <h3>DeepSeek</h3>
+              <p className="empty-state">{aiConfigured ? '已配置。留空 API Key 可只修改模型。' : '尚未配置 API Key。'}</p>
+              <label>API Key<input type="password" value={apiKeyInput} onChange={(e)=>setApiKeyInput(e.target.value)} placeholder={aiConfigured ? '••••••••（已保存）' : 'sk-...'} /></label>
+              <label>模型<input value={aiModel} onChange={(e)=>setAiModel(e.target.value)} /></label>
+              <button type="button" onClick={() => void saveAiSettings()}><Save size={16}/>保存设置</button>
+            </section>
+          </aside>
+        </div>
+      ) : null}
+
       {selectedKnowledge ? (
         <div className="drawer-backdrop" onClick={() => setSelectedKnowledge(null)}>
           <aside className="task-drawer" onClick={(event) => event.stopPropagation()}>
@@ -304,9 +418,13 @@ function App() {
               <button className="icon-button" type="button" onClick={() => setSelectedKnowledge(null)}><X size={18}/></button>
             </div>
             <section className="drawer-section">
-              <h3>{selectedKnowledge.kind === 'sop' ? '步骤 / 要点 / 补充说明' : '内容'}</h3>
-              <div className="knowledge-content">
-                {selectedKnowledge.content ?? '暂无内容。'}
+              <label>标题<input value={knowledgeTitle} onChange={(e)=>setKnowledgeTitle(e.target.value)} /></label>
+              <label>{selectedKnowledge.kind === 'sop' ? '步骤 / 要点 / 补充说明' : '内容'}
+                <textarea rows={14} value={knowledgeContent} onChange={(e)=>setKnowledgeContent(e.target.value)} />
+              </label>
+              <div className="drawer-footer-actions">
+                <button type="button" onClick={() => void saveKnowledge()}><Save size={16}/>保存</button>
+                <button className="danger-button" type="button" onClick={() => void deleteKnowledge()}><Trash2 size={16}/>删除</button>
               </div>
             </section>
           </aside>
@@ -337,6 +455,7 @@ function App() {
                         {step.completed ? <Check size={15}/> : <span className="empty-check" />}
                       </button>
                       <span className={step.completed ? 'completed-text' : ''}>{step.title}</span>
+                      <button className="tiny-delete" type="button" title="删除子任务" onClick={() => void deleteStep(step.id)}><X size={14}/></button>
                     </li>
                   ))}
                 </ul>
@@ -351,7 +470,7 @@ function App() {
               <h3>要点</h3>
               {selectedTask.points.length ? (
                 <ul className="point-list">
-                  {selectedTask.points.map((point) => <li key={point.id}>{point.content}</li>)}
+                  {selectedTask.points.map((point) => <li key={point.id}><span>{point.content}</span><button className="tiny-delete" type="button" title="删除要点" onClick={() => void deletePoint(point.id)}><X size={14}/></button></li>)}
                 </ul>
               ) : <p className="empty-state">暂无要点。</p>}
               <div className="quick-add-row">
@@ -360,9 +479,14 @@ function App() {
               </div>
             </section>
 
-            <button className="complete-wide" type="button" onClick={() => void completeTask(selectedTask.task.id)}>
-              <Check size={17}/>完成这个任务
-            </button>
+            <div className="drawer-footer-actions">
+              <button className="complete-wide" type="button" onClick={() => void completeTask(selectedTask.task.id)}>
+                <Check size={17}/>完成这个任务
+              </button>
+              <button className="danger-button" type="button" onClick={() => void trashTask(selectedTask.task.id)}>
+                <Trash2 size={17}/>删除
+              </button>
+            </div>
           </aside>
         </div>
       ) : null}
