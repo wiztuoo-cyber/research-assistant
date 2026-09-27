@@ -11,6 +11,8 @@ import { backupDatabase } from '../services/backup.js';
 import { createApp } from '../server/app.js';
 
 let mainWindow: BrowserWindow | null = null;
+let plannerWindow: BrowserWindow | null = null;
+let localBaseUrl = '';
 let tray: Tray | null = null;
 let server: Server | null = null;
 let db: DatabaseSync | null = null;
@@ -32,6 +34,50 @@ function showWindow(): void {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+function showPlanner(): void {
+  if (!plannerWindow || plannerWindow.isDestroyed()) {
+    if (localBaseUrl) createPlannerWindow(localBaseUrl);
+    return;
+  }
+  plannerWindow.showInactive();
+}
+
+function createPlannerWindow(url: string): void {
+  const display = require('electron').screen.getPrimaryDisplay();
+  const work = display.workArea;
+  const width = Math.min(980, Math.max(760, Math.round(work.width * 0.72)));
+  const height = Math.min(760, Math.max(600, Math.round(work.height * 0.78)));
+
+  plannerWindow = new BrowserWindow({
+    width,
+    height,
+    x: work.x + Math.max(0, work.width - width - 18),
+    y: work.y + 18,
+    minWidth: 720,
+    minHeight: 560,
+    title: '私人助理 · 本周计划',
+    backgroundColor: '#eef2f7',
+    autoHideMenuBar: true,
+    skipTaskbar: true,
+    alwaysOnTop: false,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  void plannerWindow.loadURL(`${url}?view=week`);
+  plannerWindow.once('ready-to-show', () => plannerWindow?.showInactive());
+  plannerWindow.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      plannerWindow?.hide();
+    }
+  });
 }
 
 async function startLocalServer(): Promise<number> {
@@ -108,7 +154,8 @@ function createTray(): void {
   tray.setToolTip('私人助理');
   const autoLaunch = app.getLoginItemSettings().openAtLogin;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '打开私人助理', click: showWindow },
+    { label: '打开桌面周计划', click: showPlanner },
+    { label: '打开完整私人助理', click: showWindow },
     { label: '导入旧数据库…', click: () => { void importLegacyDatabase(); } },
     {
       label: '开机自动启动',
@@ -177,7 +224,9 @@ if (!gotLock) {
     }
 
     const port = await startLocalServer();
-    createWindow(`http://127.0.0.1:${port}`);
+    localBaseUrl = `http://127.0.0.1:${port}`;
+    createWindow(localBaseUrl);
+    createPlannerWindow(localBaseUrl);
     createTray();
 
     globalShortcut.register('CommandOrControl+Alt+A', showWindow);
@@ -192,6 +241,7 @@ if (!gotLock) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     server?.close();
+    plannerWindow?.destroy();
     db?.close();
   });
 }
