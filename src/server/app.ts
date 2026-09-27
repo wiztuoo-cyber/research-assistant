@@ -19,7 +19,7 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask } from '../services/tasks.js';
+import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask, updateTaskFields } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard, updateKnowledgeItem } from '../services/personalOps.js';
@@ -102,6 +102,23 @@ export function createApp(db: DatabaseSync): express.Express {
   app.post('/api/tasks', (req, res) => {
     const task = createTask(db, req.body.task, req.body.createdBy ?? 'api');
     res.status(201).json({ task });
+  });
+
+  app.patch('/api/tasks/:id', (req, res) => {
+    const input = req.body.task ?? req.body;
+    const task = updateTaskFields(db, req.params.id, {
+      title: input.title,
+      notes: input.notes,
+      status: input.status,
+      priority: input.priority,
+      importance: input.importance,
+      urgency: input.urgency,
+      deadlineAt: input.deadlineAt ?? input.deadline_at,
+      startAt: input.startAt ?? input.start_at,
+      reminderAt: input.reminderAt ?? input.reminder_at,
+      estimatedMinutes: input.estimatedMinutes ?? input.estimated_minutes
+    }, req.body.createdBy ?? 'web');
+    res.json({ task });
   });
 
   app.post('/api/tasks/:id/complete', (req, res) => {
