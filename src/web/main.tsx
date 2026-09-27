@@ -1,4 +1,4 @@
-import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles, Star, X, Plus } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -10,6 +10,28 @@ interface Task {
   priority: 'low'|'medium'|'high';
   importance: number;
   deadline_at: string | null;
+  starred?: boolean;
+}
+
+interface TaskStep {
+  id: string;
+  task_id: string;
+  title: string;
+  completed: boolean;
+  position: number;
+}
+
+interface TaskPoint {
+  id: string;
+  task_id: string;
+  content: string;
+  position: number;
+}
+
+interface TaskDetailsResponse {
+  task: Task & { notes: string | null; starred: boolean };
+  steps: TaskStep[];
+  points: TaskPoint[];
 }
 
 interface ScheduleItem {
@@ -40,20 +62,13 @@ interface KnowledgeItem {
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
-    headers: {
-      'content-type': 'application/json',
-      ...(options?.headers ?? {})
-    }
+    headers: { 'content-type': 'application/json', ...(options?.headers ?? {}) }
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `请求失败：${response.status}`);
   }
   return response.json() as Promise<T>;
-}
-
-function priorityText(priority: Task['priority']) {
-  return priority === 'high' ? '重要' : priority === 'low' ? '低优先级' : '普通';
 }
 
 function App() {
@@ -64,6 +79,9 @@ function App() {
   const [smartInput, setSmartInput] = useState('');
   const [smartResult, setSmartResult] = useState('');
   const [message, setMessage] = useState('');
+  const [selectedTask, setSelectedTask] = useState<TaskDetailsResponse | null>(null);
+  const [newStep, setNewStep] = useState('');
+  const [newPoint, setNewPoint] = useState('');
 
   useEffect(() => { void refresh(); }, []);
 
@@ -76,6 +94,10 @@ function App() {
     setScheduleItems(personal.schedule);
     setApplications(personal.applications);
     setKnowledgeItems(personal.knowledge);
+  }
+
+  async function openTask(taskId: string) {
+    setSelectedTask(await api<TaskDetailsResponse>(`/api/tasks/${taskId}/details`));
   }
 
   async function submitSmartCapture(event: React.FormEvent) {
@@ -96,11 +118,45 @@ function App() {
   }
 
   async function completeTask(taskId: string) {
-    await api(`/api/tasks/${taskId}/complete`, {
-      method: 'POST',
-      body: JSON.stringify({ createdBy: 'web' })
-    });
+    await api(`/api/tasks/${taskId}/complete`, { method: 'POST', body: JSON.stringify({ createdBy: 'web' }) });
+    if (selectedTask?.task.id === taskId) setSelectedTask(null);
     await refresh();
+  }
+
+  async function toggleStar(taskId: string, starred: boolean) {
+    await api(`/api/tasks/${taskId}/star`, {
+      method: 'PATCH',
+      body: JSON.stringify({ starred })
+    });
+    if (selectedTask?.task.id === taskId) {
+      setSelectedTask({ ...selectedTask, task: { ...selectedTask.task, starred } });
+    }
+    await refresh();
+  }
+
+  async function addStep() {
+    if (!selectedTask || !newStep.trim()) return;
+    await api(`/api/tasks/${selectedTask.task.id}/steps`, {
+      method: 'POST', body: JSON.stringify({ title: newStep })
+    });
+    setNewStep('');
+    await openTask(selectedTask.task.id);
+  }
+
+  async function toggleStep(step: TaskStep) {
+    await api(`/api/tasks/steps/${step.id}`, {
+      method: 'PATCH', body: JSON.stringify({ completed: !step.completed })
+    });
+    if (selectedTask) await openTask(selectedTask.task.id);
+  }
+
+  async function addPoint() {
+    if (!selectedTask || !newPoint.trim()) return;
+    await api(`/api/tasks/${selectedTask.task.id}/points`, {
+      method: 'POST', body: JSON.stringify({ content: newPoint })
+    });
+    setNewPoint('');
+    await openTask(selectedTask.task.id);
   }
 
   const groups = useMemo(() => ({
@@ -115,11 +171,14 @@ function App() {
     return (
       <ul className="task-list">
         {items.map((task) => (
-          <li key={task.id}>
-            <div>
-              <strong>{task.title}</strong>
-              <small>{priorityText(task.priority)}{task.deadline_at ? ` · 截止 ${new Date(task.deadline_at).toLocaleString()}` : ''}</small>
-            </div>
+          <li key={task.id} className="simple-task-row">
+            <button className="task-main-button" type="button" onClick={() => void openTask(task.id)}>
+              <span className="task-title-line">
+                {task.starred ? <Star size={15} fill="currentColor" /> : null}
+                <strong>{task.title}</strong>
+              </span>
+              <small>{task.deadline_at ? `截止 ${new Date(task.deadline_at).toLocaleString()}` : ' '}</small>
+            </button>
             <button className="icon-button" type="button" title="完成" onClick={() => void completeTask(task.id)}>
               <Check size={17} />
             </button>
@@ -136,32 +195,24 @@ function App() {
           <h1>私人助理</h1>
           <p>日程、秋招、待办与 SOP 都保存在本地 SQLite</p>
         </div>
-        <button className="icon-button" type="button" onClick={() => void refresh()} title="刷新">
-          <RefreshCw size={18} />
-        </button>
+        <button className="icon-button" type="button" onClick={() => void refresh()} title="刷新"><RefreshCw size={18} /></button>
       </header>
 
       {message ? <div className="status-line">{message}</div> : null}
 
       <section className="smart-capture-panel">
-        <div className="panel-heading">
-          <Sparkles size={19} />
-          <h2>直接告诉助理发生了什么</h2>
-        </div>
+        <div className="panel-heading"><Sparkles size={19} /><h2>直接告诉助理发生了什么</h2></div>
         <form className="smart-capture-form" onSubmit={(event) => void submitSmartCapture(event)}>
-          <textarea
-            value={smartInput}
-            onChange={(event) => setSmartInput(event.target.value)}
-            placeholder="例如：今天把论文回复改完，周三下午三点OPPO二面；记录一个ANSYS重建SOP"
-            rows={3}
-          />
+          <textarea value={smartInput} onChange={(event) => setSmartInput(event.target.value)}
+            placeholder="例如：明天把论文回复改完，很重要；里面要补MMA对比、修改C_pred图；注意不要说设计空间降维"
+            rows={3} />
           <button type="submit"><Sparkles size={17} />智能记录</button>
         </form>
         {smartResult ? <div className="smart-result">{smartResult}</div> : null}
       </section>
 
       <section className="planning-grid">
-        <div className="panel task-bucket important-bucket">
+        <div className="panel task-bucket">
           <div className="panel-heading"><Check size={19}/><h2>今天</h2></div>
           {taskList(groups.today, '今天暂无任务。')}
         </div>
@@ -210,10 +261,62 @@ function App() {
           {!knowledgeItems.length ? <p className="empty-state">暂无知识记录。</p> : null}
         </div>
       </section>
+
+      {selectedTask ? (
+        <div className="drawer-backdrop" onClick={() => setSelectedTask(null)}>
+          <aside className="task-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="drawer-header">
+              <div className="drawer-title">
+                <button className={selectedTask.task.starred ? 'star-button active' : 'star-button'} type="button"
+                  title="标记重要" onClick={() => void toggleStar(selectedTask.task.id, !selectedTask.task.starred)}>
+                  <Star size={20} fill={selectedTask.task.starred ? 'currentColor' : 'none'} />
+                </button>
+                <h2>{selectedTask.task.title}</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setSelectedTask(null)}><X size={18}/></button>
+            </div>
+
+            <section className="drawer-section">
+              <h3>子任务</h3>
+              {selectedTask.steps.length ? (
+                <ul className="detail-list">
+                  {selectedTask.steps.map((step) => (
+                    <li key={step.id}>
+                      <button className="step-check" type="button" onClick={() => void toggleStep(step)}>
+                        {step.completed ? <Check size={15}/> : <span className="empty-check" />}
+                      </button>
+                      <span className={step.completed ? 'completed-text' : ''}>{step.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="empty-state">没有子任务。</p>}
+              <div className="quick-add-row">
+                <input value={newStep} onChange={(e)=>setNewStep(e.target.value)} placeholder="添加一个步骤..." onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); void addStep(); } }} />
+                <button className="icon-button" type="button" onClick={() => void addStep()}><Plus size={16}/></button>
+              </div>
+            </section>
+
+            <section className="drawer-section">
+              <h3>要点</h3>
+              {selectedTask.points.length ? (
+                <ul className="point-list">
+                  {selectedTask.points.map((point) => <li key={point.id}>{point.content}</li>)}
+                </ul>
+              ) : <p className="empty-state">暂无要点。</p>}
+              <div className="quick-add-row">
+                <input value={newPoint} onChange={(e)=>setNewPoint(e.target.value)} placeholder="记一个重要要点..." onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); void addPoint(); } }} />
+                <button className="icon-button" type="button" onClick={() => void addPoint()}><Plus size={16}/></button>
+              </div>
+            </section>
+
+            <button className="complete-wide" type="button" onClick={() => void completeTask(selectedTask.task.id)}>
+              <Check size={17}/>完成这个任务
+            </button>
+          </aside>
+        </div>
+      ) : null}
     </main>
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><App /></React.StrictMode>
-);
+createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
