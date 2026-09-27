@@ -35,6 +35,7 @@ export function toTask(row: Row): Task {
     updated_at: String(row.updated_at),
     completed_at: nullableString(row.completed_at),
     deleted_at: nullableString(row.deleted_at),
+    starred: Number(row.starred) === 1,
     requires_computer: row.requires_computer === undefined ? undefined : Number(row.requires_computer),
     requires_phone: row.requires_phone === undefined ? undefined : Number(row.requires_phone),
     requires_internet: row.requires_internet === undefined ? undefined : Number(row.requires_internet),
@@ -396,5 +397,23 @@ export function listPlanningTasks(db: DatabaseSync): Task[] {
       `
     )
     .all()
+    .map((row) => toTask(row as Row));
+}
+
+
+export function listCompletedTasks(db: DatabaseSync, limit = 100): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.deleted_at is null
+          and tasks.status = 'completed'
+        order by tasks.completed_at desc, tasks.updated_at desc
+        limit ?
+      `
+    )
+    .all(limit)
     .map((row) => toTask(row as Row));
 }
