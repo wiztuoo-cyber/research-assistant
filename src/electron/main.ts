@@ -1,6 +1,6 @@
-import { app, BrowserWindow, Menu, Tray, globalShortcut, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage } from 'electron';
 import express from 'express';
-import { existsSync } from 'node:fs';
+import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
@@ -64,11 +64,58 @@ async function startLocalServer(): Promise<number> {
   });
 }
 
+async function importLegacyDatabase(): Promise<void> {
+  const result = await dialog.showOpenDialog({
+    title: '选择旧版 tasks.sqlite',
+    properties: ['openFile'],
+    filters: [{ name: 'SQLite 数据库', extensions: ['sqlite', 'db'] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return;
+
+  const confirm = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['导入并重启', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    title: '导入旧数据',
+    message: '导入会用选中的数据库替换当前桌面版数据库。',
+    detail: '当前数据库会先自动备份。完成后私人助理会自动重启。'
+  });
+  if (confirm.response !== 0) return;
+
+  const target = getDatabasePath();
+  try {
+    db?.exec('PRAGMA wal_checkpoint(FULL);');
+    backupDatabase(target);
+  } catch {}
+
+  server?.close();
+  db?.close();
+  db = null;
+
+  copyFileSync(result.filePaths[0], target);
+  app.relaunch();
+  quitting = true;
+  app.quit();
+}
+
+function setAutoLaunch(enabled: boolean): void {
+  app.setLoginItemSettings({ openAtLogin: enabled });
+}
+
 function createTray(): void {
   tray = new Tray(trayImage());
   tray.setToolTip('私人助理');
+  const autoLaunch = app.getLoginItemSettings().openAtLogin;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开私人助理', click: showWindow },
+    { label: '导入旧数据库…', click: () => { void importLegacyDatabase(); } },
+    {
+      label: '开机自动启动',
+      type: 'checkbox',
+      checked: autoLaunch,
+      click: (item) => setAutoLaunch(item.checked)
+    },
     { type: 'separator' },
     {
       label: '退出',
@@ -123,6 +170,7 @@ if (!gotLock) {
     db = openDatabase();
     runMigrations(db);
     try {
+      db.exec('PRAGMA wal_checkpoint(FULL);');
       backupDatabase(getDatabasePath());
     } catch (error) {
       console.warn('Database backup skipped:', error);
