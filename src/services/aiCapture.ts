@@ -1,10 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createTask } from './tasks.js';
+import { addTaskPoint, addTaskStep, setTaskStarred } from './taskDetails.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem } from './personalOps.js';
 import { unifiedCapture, type UnifiedCaptureResult } from './unifiedCapture.js';
 
 type AiAction =
-  | { type: 'task'; title: string; status?: 'today'|'next'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null }
+  | { type: 'task'; title: string; status?: 'today'|'next'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
   | { type: 'schedule'; title: string; kind?: string; start_at?: string|null; end_at?: string|null; location?: string|null; notes?: string|null }
   | { type: 'job'; company: string; role?: string|null; status?: string; next_action?: string|null; deadline_at?: string|null; event_at?: string|null; notes?: string|null }
   | { type: 'knowledge'; kind: 'sop'|'skill'|'note'; title: string; category?: string|null; content?: string|null };
@@ -33,7 +34,8 @@ export async function aiCapture(db: DatabaseSync, text: string): Promise<Unified
           content: `你是个人事务数据库解析器。今天是 ${today}。把用户输入拆成一个或多个动作，只输出JSON，不要解释。
 JSON格式：{"actions":[...],"summary":"简短确认"}。
 action type只能是task/schedule/job/knowledge。
-task字段：title,status(today/next/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),notes。
+task字段：title,status(today/next/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。
+steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
 schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
 job用于秋招进展，字段company,role,status(wishlist/applied/written_test/interview/offer/rejected/withdrawn/closed),next_action,deadline_at,event_at,notes。
@@ -59,7 +61,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
 
   for (const action of actions) {
     if (action.type === 'task') {
-      saved.push(createTask(db, {
+      const task = createTask(db, {
         title: action.title,
         status: action.status ?? 'next',
         priority: action.priority ?? 'medium',
@@ -67,7 +69,11 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         urgency: action.status === 'today' ? 5 : 3,
         deadlineAt: action.deadline_at ?? null,
         notes: action.notes ?? null
-      }, 'deepseek'));
+      }, 'deepseek');
+      if (action.starred) setTaskStarred(db, task.id, true);
+      for (const step of action.steps ?? []) if (step?.trim()) addTaskStep(db, task.id, step);
+      for (const point of action.points ?? []) if (point?.trim()) addTaskPoint(db, task.id, point);
+      saved.push(task);
     } else if (action.type === 'schedule') {
       saved.push(createScheduleItem(db, {
         title: action.title,
