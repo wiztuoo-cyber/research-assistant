@@ -24,6 +24,7 @@ import { createComputeJob, createDevice, listComputeJobs, listDevices, researchD
 import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
 import { unifiedCapture } from '../services/unifiedCapture.js';
+import { aiCapture } from '../services/aiCapture.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -163,10 +164,10 @@ export function createApp(db: DatabaseSync): express.Express {
     res.status(201).json({ item });
   });
 
-  app.post('/api/personal/capture', (req, res) => {
-    const result = unifiedCapture(db, String(req.body.text ?? ''));
+  app.post('/api/personal/capture', asyncHandler(async (req, res) => {
+    const result = await aiCapture(db, String(req.body.text ?? ''));
     res.json(result);
-  });
+  }));
 
   app.post('/api/ai-suggestions', (req, res) => {
     const suggestion = createAiSuggestion(db, req.body);
