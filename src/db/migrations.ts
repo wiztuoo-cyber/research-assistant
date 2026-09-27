@@ -267,6 +267,37 @@ export const migrations: Migration[] = [
       create index if not exists idx_knowledge_items_kind
         on knowledge_items(kind, updated_at desc);
     `
+  },
+  {
+    id: '0005_task_details',
+    sql: `
+      alter table tasks add column starred integer not null default 0 check (starred in (0,1));
+
+      create table if not exists task_steps (
+        id text primary key,
+        task_id text not null references tasks(id) on delete cascade,
+        title text not null,
+        completed integer not null default 0 check (completed in (0,1)),
+        position integer not null default 0,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_task_steps_task_position
+        on task_steps(task_id, position, created_at);
+
+      create table if not exists task_points (
+        id text primary key,
+        task_id text not null references tasks(id) on delete cascade,
+        content text not null,
+        position integer not null default 0,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create index if not exists idx_task_points_task_position
+        on task_points(task_id, position, created_at);
+    `
   }
 ];
 
