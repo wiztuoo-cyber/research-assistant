@@ -25,6 +25,7 @@ import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
 import { unifiedCapture } from '../services/unifiedCapture.js';
 import { aiCapture } from '../services/aiCapture.js';
+import { addTaskPoint, addTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted } from '../services/taskDetails.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -103,6 +104,27 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.get('/api/tasks/planning', (_req, res) => {
     res.json({ tasks: listPlanningTasks(db) });
+  });
+
+  app.get('/api/tasks/:id/details', (req, res) => {
+    res.json(getTaskDetails(db, req.params.id));
+  });
+
+  app.post('/api/tasks/:id/steps', (req, res) => {
+    res.status(201).json({ step: addTaskStep(db, req.params.id, String(req.body.title ?? '')) });
+  });
+
+  app.patch('/api/tasks/steps/:stepId', (req, res) => {
+    res.json({ step: setTaskStepCompleted(db, req.params.stepId, Boolean(req.body.completed)) });
+  });
+
+  app.post('/api/tasks/:id/points', (req, res) => {
+    res.status(201).json({ point: addTaskPoint(db, req.params.id, String(req.body.content ?? '')) });
+  });
+
+  app.patch('/api/tasks/:id/star', (req, res) => {
+    setTaskStarred(db, req.params.id, Boolean(req.body.starred));
+    res.json({ ok: true });
   });
 
   app.post('/api/recommendations/now', (req, res) => {
