@@ -76,6 +76,10 @@ function App() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
+  const [showLongTerm, setShowLongTerm] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [selectedKnowledge, setSelectedKnowledge] = useState<KnowledgeItem | null>(null);
   const [smartInput, setSmartInput] = useState('');
   const [smartResult, setSmartResult] = useState('');
   const [message, setMessage] = useState('');
@@ -86,14 +90,16 @@ function App() {
   useEffect(() => { void refresh(); }, []);
 
   async function refresh() {
-    const [planning, personal] = await Promise.all([
+    const [planning, personal, completed] = await Promise.all([
       api<{ tasks: Task[] }>('/api/tasks/planning'),
-      api<{ schedule: ScheduleItem[]; applications: JobApplication[]; knowledge: KnowledgeItem[] }>('/api/personal/dashboard')
+      api<{ schedule: ScheduleItem[]; applications: JobApplication[]; knowledge: KnowledgeItem[] }>('/api/personal/dashboard'),
+      api<{ tasks: Task[] }>('/api/tasks/completed?limit=50')
     ]);
     setTasks(planning.tasks);
     setScheduleItems(personal.schedule);
     setApplications(personal.applications);
     setKnowledgeItems(personal.knowledge);
+    setCompletedTasks(completed.tasks);
   }
 
   async function openTask(taskId: string) {
@@ -224,9 +230,12 @@ function App() {
           <div className="panel-heading"><RefreshCw size={19}/><h2>等待跟进</h2></div>
           {taskList(groups.waiting, '暂无等待事项。')}
         </div>
-        <div className="panel task-bucket">
+        <div className="panel task-bucket compact-bucket">
           <div className="panel-heading"><BookOpen size={19}/><h2>长期任务</h2></div>
-          {taskList(groups.long, '暂无长期任务。')}
+          <button className="link-button" type="button" onClick={() => setShowLongTerm(!showLongTerm)}>
+            {groups.long.length} 项 {showLongTerm ? '收起' : '查看'}
+          </button>
+          {showLongTerm ? taskList(groups.long, '暂无长期任务。') : null}
         </div>
       </section>
 
@@ -245,7 +254,7 @@ function App() {
           <div className="panel-heading"><BriefcaseBusiness size={19}/><h2>秋招进展</h2></div>
           <ul className="simple-list stacked-list">
             {applications.slice(0, 10).map((item) => (
-              <li key={item.id}><div><strong>{item.company}</strong><small>{item.role ?? '未填写岗位'} · {item.status}</small>{item.next_action ? <small>下一步：{item.next_action}</small> : null}</div></li>
+              <li key={item.id}><div><strong>{item.company}</strong><small>{item.role ?? '未填写岗位'} · {item.status}{item.event_at ? ` · ${new Date(item.event_at).toLocaleString()}` : ''}</small></div></li>
             ))}
           </ul>
           {!applications.length ? <p className="empty-state">暂无秋招记录。</p> : null}
@@ -255,12 +264,54 @@ function App() {
           <div className="panel-heading"><BookOpen size={19}/><h2>SOP / 技能 / 知识</h2></div>
           <ul className="simple-list stacked-list">
             {knowledgeItems.slice(0, 10).map((item) => (
-              <li key={item.id}><div><strong>{item.title}</strong><small>{item.category ?? item.kind}</small></div></li>
+              <li key={item.id}>
+                <button className="knowledge-row" type="button" onClick={() => setSelectedKnowledge(item)}>
+                  <strong>{item.title}</strong>
+                  <small>{item.category ?? item.kind}</small>
+                </button>
+              </li>
             ))}
           </ul>
           {!knowledgeItems.length ? <p className="empty-state">暂无知识记录。</p> : null}
         </div>
       </section>
+
+      <section className="history-entry">
+        <button className="link-button" type="button" onClick={() => setShowCompleted(!showCompleted)}>
+          已完成 {completedTasks.length} 项 {showCompleted ? '收起' : '>'}
+        </button>
+        {showCompleted ? (
+          <div className="completed-panel">
+            {completedTasks.length ? (
+              <ul className="simple-list stacked-list">
+                {completedTasks.map((task) => (
+                  <li key={task.id}><div><strong>✓ {task.title}</strong><small>{task.deadline_at ? `原截止：${new Date(task.deadline_at).toLocaleString()}` : '已完成'}</small></div></li>
+                ))}
+              </ul>
+            ) : <p className="empty-state">暂无已完成任务。</p>}
+          </div>
+        ) : null}
+      </section>
+
+      {selectedKnowledge ? (
+        <div className="drawer-backdrop" onClick={() => setSelectedKnowledge(null)}>
+          <aside className="task-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="drawer-header">
+              <div>
+                <small>{selectedKnowledge.category ?? selectedKnowledge.kind}</small>
+                <h2>{selectedKnowledge.title}</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setSelectedKnowledge(null)}><X size={18}/></button>
+            </div>
+            <section className="drawer-section">
+              <h3>{selectedKnowledge.kind === 'sop' ? '步骤 / 要点 / 补充说明' : '内容'}</h3>
+              <div className="knowledge-content">
+                {selectedKnowledge.content ?? '暂无内容。'}
+              </div>
+            </section>
+          </aside>
+        </div>
+      ) : null}
 
       {selectedTask ? (
         <div className="drawer-backdrop" onClick={() => setSelectedTask(null)}>
