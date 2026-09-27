@@ -818,6 +818,16 @@ small {
 }
 
 
+.week-widget-page,
+.week-widget-page body,
+.week-widget-page #root {
+  background: transparent !important;
+}
+
+.week-widget-page body {
+  overflow: hidden;
+}
+
 .week-planner-shell {
   min-height: 100vh;
   padding: 12px;
