@@ -289,16 +289,19 @@ export function listTodayTasks(db: DatabaseSync, now = nowIso()): Task[] {
         where tasks.status not in ('completed', 'canceled', 'trash')
           and (
             tasks.status = 'today'
+            or substr(tasks.start_at, 1, 10) = ?
             or substr(tasks.deadline_at, 1, 10) = ?
           )
         order by
-          case when substr(tasks.deadline_at, 1, 10) = ? then 0 else 1 end,
+          case when substr(tasks.start_at, 1, 10) = ? then 0
+               when substr(tasks.deadline_at, 1, 10) = ? then 1
+               else 2 end,
           tasks.importance desc,
           tasks.urgency desc,
           tasks.created_at asc
       `
     )
-    .all(day, day)
+    .all(day, day, day, day)
     .map((row) => toTask(row as Row));
 }
 
