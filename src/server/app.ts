@@ -58,6 +58,8 @@ function asyncHandler(
 export interface DesktopControls {
   setWidgetOpacity?: (opacity: number) => void;
   getWidgetOpacity?: () => number;
+  getWidgetBounds?: () => { width: number; height: number } | null;
+  resizeWidget?: (width: number, height: number) => void;
 }
 
 function pickField(input: Record<string, unknown>, camel: string, snake: string): unknown {
@@ -101,6 +103,23 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
     }
     desktopControls.setWidgetOpacity?.(opacity);
     res.json({ ok: true, opacity });
+  });
+
+  app.get('/api/desktop/widget/bounds', (_req, res) => {
+    res.json({ bounds: desktopControls.getWidgetBounds?.() ?? null });
+  });
+
+  app.post('/api/desktop/widget/resize', (req, res) => {
+    const width = Math.round(Number(req.body.width));
+    const height = Math.round(Number(req.body.height));
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      res.status(400).json({ error: 'Invalid widget size.' });
+      return;
+    }
+    const safeWidth = Math.max(560, Math.min(1800, width));
+    const safeHeight = Math.max(420, Math.min(1400, height));
+    desktopControls.resizeWidget?.(safeWidth, safeHeight);
+    res.json({ ok: true, width: safeWidth, height: safeHeight });
   });
 
   app.post('/api/inbox', (req, res) => {
