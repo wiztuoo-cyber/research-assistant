@@ -20,6 +20,23 @@ let quitting = false;
 const firedReminders = new Set<string>();
 let reminderTimer: NodeJS.Timeout | null = null;
 
+function reminderStatePath(): string {
+  return join(app.getPath('userData'), 'fired-reminders.json');
+}
+
+function loadFiredReminders(): void {
+  try {
+    const items = JSON.parse(readFileSync(reminderStatePath(), 'utf8')) as string[];
+    for (const item of items.slice(-2000)) firedReminders.add(item);
+  } catch {}
+}
+
+function saveFiredReminders(): void {
+  try {
+    writeFileSync(reminderStatePath(), JSON.stringify(Array.from(firedReminders).slice(-2000)), 'utf8');
+  } catch {}
+}
+
 function checkWindowsReminders(): void {
   if (!db || !Notification.isSupported()) return;
   const now = Date.now();
@@ -38,6 +55,7 @@ function checkWindowsReminders(): void {
     const key = `${row.id}|${row.reminder_at}`;
     if (firedReminders.has(key)) continue;
     firedReminders.add(key);
+    saveFiredReminders();
 
     const notice = new Notification({
       title: '私人助理',
@@ -267,7 +285,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', showWindow);
+  app.on('second-instance', showPlanner);
 
   app.whenReady().then(async () => {
     const userData = app.getPath('userData');
@@ -276,6 +294,7 @@ if (!gotLock) {
 
     app.setAppUserModelId('com.local.personalassistant');
     loadLocalEnv();
+    loadFiredReminders();
 
     db = openDatabase();
     runMigrations(db);
@@ -299,7 +318,7 @@ if (!gotLock) {
     globalShortcut.register('CommandOrControl+Alt+A', showPlanner);
   });
 
-  app.on('activate', showWindow);
+  app.on('activate', showPlanner);
 
   app.on('before-quit', () => {
     quitting = true;
