@@ -19,7 +19,7 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks } from '../services/tasks.js';
+import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, restoreTask, trashTask } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard } from '../services/personalOps.js';
@@ -94,6 +94,16 @@ export function createApp(db: DatabaseSync): express.Express {
 
   app.post('/api/tasks/:id/complete', (req, res) => {
     const task = completeTask(db, req.params.id, req.body.createdBy ?? 'api');
+    res.json({ task });
+  });
+
+  app.post('/api/tasks/:id/trash', (req, res) => {
+    const task = trashTask(db, req.params.id, req.body.createdBy ?? 'web');
+    res.json({ task });
+  });
+
+  app.post('/api/tasks/:id/restore', (req, res) => {
+    const task = restoreTask(db, req.params.id, req.body.status ?? 'next', req.body.createdBy ?? 'web');
     res.json({ task });
   });
 
