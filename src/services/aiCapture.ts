@@ -1,11 +1,15 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { createTask } from './tasks.js';
+import { createTask, listPlanningTasks, trashTask, updateTaskFields } from './tasks.js';
 import { addTaskPoint, addTaskStep, setTaskStarred } from './taskDetails.js';
 import { createJobApplication, createKnowledgeItem, createScheduleItem } from './personalOps.js';
 import { unifiedCapture, type UnifiedCaptureResult } from './unifiedCapture.js';
 
 type AiAction =
   | { type: 'task'; title: string; status?: 'today'|'next'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
+  | { type: 'update_task'; task_id: string; title?: string; status?: 'today'|'next'|'waiting'|'someday'|'completed'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean }
+  | { type: 'delete_task'; task_id: string }
+  | { type: 'add_step'; task_id: string; title: string }
+  | { type: 'add_point'; task_id: string; content: string }
   | { type: 'schedule'; title: string; kind?: string; start_at?: string|null; end_at?: string|null; location?: string|null; notes?: string|null }
   | { type: 'job'; company: string; role?: string|null; status?: string; next_action?: string|null; deadline_at?: string|null; event_at?: string|null; notes?: string|null }
   | { type: 'knowledge'; kind: 'sop'|'skill'|'note'; title: string; category?: string|null; content?: string|null };
@@ -19,6 +23,13 @@ export async function aiCapture(db: DatabaseSync, text: string): Promise<Unified
   if (!key) return { ...unifiedCapture(db, text), provider: 'local' };
 
   const today = new Date().toISOString().slice(0,10);
+  const activeTasks = listPlanningTasks(db).slice(0, 50).map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    deadline_at: task.deadline_at,
+    starred: task.starred
+  }));
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: {
@@ -33,7 +44,15 @@ export async function aiCapture(db: DatabaseSync, text: string): Promise<Unified
           role: 'system',
           content: `你是个人事务数据库解析器。今天是 ${today}。把用户输入拆成一个或多个动作，只输出JSON，不要解释。
 JSON格式：{"actions":[...],"summary":"简短确认"}。
-action type只能是task/schedule/job/knowledge。
+action type只能是task/update_task/delete_task/add_step/add_point/schedule/job/knowledge。
+如果用户是在延期、修改、完成、等待、删除一个已经存在的任务，必须操作已有任务，不要新建重复任务。
+当前已有任务会附在用户消息后面。
+update_task字段：task_id,title,status(today/next/waiting/someday/completed),priority,deadline_at,notes,starred。
+delete_task字段：task_id。
+add_step字段：task_id,title。
+add_point字段：task_id,content。
+如果用户说“这两个任务”“上面的任务”“今天这两个”等，要根据已有任务列表匹配对应task_id并分别生成动作。
+如果用户只说“明天”“后天”而没有具体时刻，deadline_at只写YYYY-MM-DD，不要擅自添加09:00。
 task字段：title,status(today/next/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。
 steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
@@ -42,7 +61,7 @@ job用于秋招进展，字段company,role,status(wishlist/applied/written_test/
 knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,category,content。
 同一句可生成多个action。优先级按实际重要程度判断，不要把所有事项都设为high。日期无法确定时填null。`
         },
-        { role: 'user', content: text }
+        { role: 'user', content: `${text}\n\n当前已有任务：${JSON.stringify(activeTasks)}` }
       ]
     })
   });
@@ -60,7 +79,25 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
   const saved: unknown[] = [];
 
   for (const action of actions) {
-    if (action.type === 'task') {
+    if (action.type === 'update_task') {
+      const updated = updateTaskFields(db, action.task_id, {
+        title: action.title,
+        status: action.status,
+        priority: action.priority,
+        importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : undefined,
+        urgency: action.status === 'today' ? 5 : action.status ? 3 : undefined,
+        deadlineAt: action.deadline_at,
+        notes: action.notes
+      }, 'deepseek');
+      if (action.starred !== undefined) setTaskStarred(db, action.task_id, action.starred);
+      saved.push(updated);
+    } else if (action.type === 'delete_task') {
+      saved.push(trashTask(db, action.task_id, 'deepseek'));
+    } else if (action.type === 'add_step') {
+      saved.push(addTaskStep(db, action.task_id, action.title));
+    } else if (action.type === 'add_point') {
+      saved.push(addTaskPoint(db, action.task_id, action.content));
+    } else if (action.type === 'task') {
       const task = createTask(db, {
         title: action.title,
         status: action.status ?? 'next',
