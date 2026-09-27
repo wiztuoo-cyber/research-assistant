@@ -5,14 +5,25 @@ import { createJobApplication, createKnowledgeItem, createScheduleItem } from '.
 import { unifiedCapture, type UnifiedCaptureResult } from './unifiedCapture.js';
 
 type AiAction =
-  | { type: 'task'; title: string; status?: 'today'|'next'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
-  | { type: 'update_task'; task_id: string; title?: string; status?: 'today'|'next'|'waiting'|'someday'|'completed'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean }
+  | { type: 'task'; title: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean; steps?: string[]; points?: string[] }
+  | { type: 'update_task'; task_id: string; title?: string; status?: 'today'|'next'|'scheduled'|'waiting'|'someday'|'completed'; priority?: 'low'|'medium'|'high'; deadline_at?: string|null; notes?: string|null; starred?: boolean }
   | { type: 'delete_task'; task_id: string }
   | { type: 'add_step'; task_id: string; title: string }
   | { type: 'add_point'; task_id: string; content: string }
   | { type: 'schedule'; title: string; kind?: string; start_at?: string|null; end_at?: string|null; location?: string|null; notes?: string|null }
   | { type: 'job'; company: string; role?: string|null; status?: string; next_action?: string|null; deadline_at?: string|null; event_at?: string|null; notes?: string|null }
   | { type: 'knowledge'; kind: 'sop'|'skill'|'note'; title: string; category?: string|null; content?: string|null };
+
+function localClockContext(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offsetMinutes = -d.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMinutes);
+  const offset = `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(d);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${weekday} UTC${offset}`;
+}
 
 function stripFence(s: string): string {
   return s.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
@@ -22,7 +33,7 @@ export async function aiCapture(db: DatabaseSync, text: string): Promise<Unified
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) return { ...unifiedCapture(db, text), provider: 'local' };
 
-  const today = new Date().toISOString().slice(0,10);
+  const localNow = localClockContext();
   const activeTasks = listPlanningTasks(db).slice(0, 50).map((task) => ({
     id: task.id,
     title: task.title,
@@ -42,7 +53,7 @@ export async function aiCapture(db: DatabaseSync, text: string): Promise<Unified
       messages: [
         {
           role: 'system',
-          content: `你是个人事务数据库解析器。今天是 ${today}。把用户输入拆成一个或多个动作，只输出JSON，不要解释。
+          content: `你是个人事务数据库解析器。当前本地日期、时间和时区是 ${localNow}。所有“今天/明天/周几/今晚/下午”等表达都必须以这个本地时间为准。把用户输入拆成一个或多个动作，只输出JSON，不要解释。
 JSON格式：{"actions":[...],"summary":"简短确认"}。
 action type只能是task/update_task/delete_task/add_step/add_point/schedule/job/knowledge。
 如果用户是在延期、修改、完成、等待、删除一个已经存在的任务，必须操作已有任务，不要新建重复任务。
@@ -53,7 +64,7 @@ add_step字段：task_id,title。
 add_point字段：task_id,content。
 如果用户说“这两个任务”“上面的任务”“今天这两个”等，要根据已有任务列表匹配对应task_id并分别生成动作。
 如果用户只说“明天”“后天”而没有具体时刻，deadline_at只写YYYY-MM-DD，不要擅自添加09:00。
-task字段：title,status(today/next/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。
+task字段：title,status(today/next/scheduled/waiting/someday),priority(low/medium/high),deadline_at(ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。有明确日期但不属于“今天”的计划任务可用scheduled。
 steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
 schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
