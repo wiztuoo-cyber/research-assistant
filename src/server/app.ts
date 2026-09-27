@@ -55,7 +55,18 @@ function asyncHandler(
   };
 }
 
-export function createApp(db: DatabaseSync): express.Express {
+export interface DesktopControls {
+  setWidgetOpacity?: (opacity: number) => void;
+  getWidgetOpacity?: () => number;
+}
+
+function pickField(input: Record<string, unknown>, camel: string, snake: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(input, camel)) return input[camel];
+  if (Object.prototype.hasOwnProperty.call(input, snake)) return input[snake];
+  return undefined;
+}
+
+export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {}): express.Express {
   const app = express();
   app.use(express.json());
   app.use('/api', requireAuth);
@@ -73,6 +84,23 @@ export function createApp(db: DatabaseSync): express.Express {
       apiKey: req.body.apiKey,
       model: req.body.model
     }));
+  });
+
+  app.get('/api/desktop/widget', (_req, res) => {
+    res.json({
+      supported: Boolean(desktopControls.setWidgetOpacity),
+      opacity: desktopControls.getWidgetOpacity?.() ?? 1
+    });
+  });
+
+  app.post('/api/desktop/widget/opacity', (req, res) => {
+    const opacity = Math.max(0.55, Math.min(1, Number(req.body.opacity ?? 1)));
+    if (!Number.isFinite(opacity)) {
+      res.status(400).json({ error: 'Invalid opacity.' });
+      return;
+    }
+    desktopControls.setWidgetOpacity?.(opacity);
+    res.json({ ok: true, opacity });
   });
 
   app.post('/api/inbox', (req, res) => {
@@ -105,18 +133,18 @@ export function createApp(db: DatabaseSync): express.Express {
   });
 
   app.patch('/api/tasks/:id', (req, res) => {
-    const input = req.body.task ?? req.body;
+    const input = (req.body.task ?? req.body) as Record<string, unknown>;
     const task = updateTaskFields(db, req.params.id, {
-      title: input.title,
-      notes: input.notes,
-      status: input.status,
-      priority: input.priority,
-      importance: input.importance,
-      urgency: input.urgency,
-      deadlineAt: input.deadlineAt ?? input.deadline_at,
-      startAt: input.startAt ?? input.start_at,
-      reminderAt: input.reminderAt ?? input.reminder_at,
-      estimatedMinutes: input.estimatedMinutes ?? input.estimated_minutes
+      title: input.title as string | undefined,
+      notes: pickField(input, 'notes', 'notes') as string | null | undefined,
+      status: input.status as any,
+      priority: input.priority as any,
+      importance: input.importance as number | undefined,
+      urgency: input.urgency as number | undefined,
+      deadlineAt: pickField(input, 'deadlineAt', 'deadline_at') as string | null | undefined,
+      startAt: pickField(input, 'startAt', 'start_at') as string | null | undefined,
+      reminderAt: pickField(input, 'reminderAt', 'reminder_at') as string | null | undefined,
+      estimatedMinutes: pickField(input, 'estimatedMinutes', 'estimated_minutes') as number | null | undefined
     }, req.body.createdBy ?? 'web');
     res.json({ task });
   });
