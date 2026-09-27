@@ -31,7 +31,25 @@ function stripFence(s: string): string {
 
 export async function aiCapture(db: DatabaseSync, text: string, options: { forcedStartAt?: string | null } = {}): Promise<UnifiedCaptureResult & { provider: string }> {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!key) return { ...unifiedCapture(db, text), provider: 'local' };
+  if (!key) {
+    if (options.forcedStartAt) {
+      const task = createTask(db, {
+        title: text.trim(),
+        status: 'next',
+        priority: 'medium',
+        importance: 3,
+        urgency: 3,
+        startAt: options.forcedStartAt
+      }, 'local');
+      return {
+        category: 'task',
+        summary: '已按指定日期保存任务',
+        actions: [{ index: 0 }],
+        provider: 'local'
+      };
+    }
+    return { ...unifiedCapture(db, text), provider: 'local' };
+  }
 
   const localNow = localClockContext();
   const activeTasks = listPlanningTasks(db).slice(0, 50).map((task) => ({
