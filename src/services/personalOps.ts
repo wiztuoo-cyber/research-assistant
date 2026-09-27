@@ -147,3 +147,29 @@ export function personalDashboard(db: DatabaseSync) {
     knowledge: listKnowledgeItems(db)
   };
 }
+
+
+export function updateKnowledgeItem(
+  db: DatabaseSync,
+  id: string,
+  input: Partial<Pick<KnowledgeItem, 'title'|'category'|'content'|'status'>>,
+  at=nowIso()
+): KnowledgeItem {
+  const old = db.prepare('select * from knowledge_items where id=?').get(id) as Row | undefined;
+  if(!old) throw new Error('Knowledge item not found.');
+  db.prepare(
+    'update knowledge_items set title=?, category=?, content=?, status=?, updated_at=? where id=?'
+  ).run(
+    input.title ?? String(old.title),
+    input.category === undefined ? ns(old.category) : input.category,
+    input.content === undefined ? ns(old.content) : input.content,
+    input.status ?? String(old.status),
+    at,
+    id
+  );
+  return toKnowledge(db.prepare('select * from knowledge_items where id=?').get(id) as Row);
+}
+
+export function archiveKnowledgeItem(db: DatabaseSync, id: string, at=nowIso()): KnowledgeItem {
+  return updateKnowledgeItem(db, id, { status: 'archived' }, at);
+}
