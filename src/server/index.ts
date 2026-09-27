@@ -1,5 +1,5 @@
 import { loadLocalEnv } from '../config/env.js';
-import { openDatabase } from '../db/connection.js';
+import { getDatabasePath, openDatabase } from '../db/connection.js';
 import { runMigrations } from '../db/migrations.js';
 import { createApp } from './app.js';
 import { backupDatabase } from '../services/backup.js';
@@ -9,7 +9,7 @@ loadLocalEnv();
 const port = Number(process.env.PORT ?? 4010);
 const db = openDatabase();
 runMigrations(db);
-try { backupDatabase(process.env.TASK_DB_PATH ?? new URL('../../data/tasks.sqlite', import.meta.url).pathname); } catch (error) { console.warn('Database backup skipped:', error); }
+try { backupDatabase(getDatabasePath()); } catch (error) { console.warn('Database backup skipped:', error); }
 
 const app = createApp(db);
 const server = app.listen(port, '0.0.0.0', () => {
