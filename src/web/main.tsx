@@ -717,4 +717,5 @@ function App() {
 }
 
 const isWeekPlanner = new URLSearchParams(window.location.search).get('view') === 'week';
+document.documentElement.classList.toggle('week-widget-page', isWeekPlanner);
 createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <WeekPlanner /> : <App />}</React.StrictMode>);
