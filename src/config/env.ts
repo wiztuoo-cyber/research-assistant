@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export function loadLocalEnv(): void {
-  const file = resolve(process.cwd(), '.env');
+  const file = process.env.SETTINGS_FILE_PATH ? resolve(process.env.SETTINGS_FILE_PATH) : resolve(process.cwd(), '.env');
   if (!existsSync(file)) return;
   const text = readFileSync(file, 'utf8');
   for (const raw of text.split(/\r?\n/)) {
