@@ -75,3 +75,12 @@ export function getTaskDetails(db: DatabaseSync, taskId: string) {
     points:listTaskPoints(db,taskId)
   };
 }
+
+
+export function deleteTaskStep(db: DatabaseSync, stepId: string): void {
+  db.prepare('delete from task_steps where id=?').run(stepId);
+}
+
+export function deleteTaskPoint(db: DatabaseSync, pointId: string): void {
+  db.prepare('delete from task_points where id=?').run(pointId);
+}
