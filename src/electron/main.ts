@@ -48,10 +48,7 @@ function showReminderNotification(key: string, title: string): boolean {
   pendingReminderKeys.add(key);
   const notification = new Notification({
     title: '私人助理提醒',
-    body: title,
-    silent: true,
-    timeoutType: 'default',
-    groupId: 'personal-assistant-reminders'
+    body: title
   });
 
   activeNotifications.add(notification);
@@ -135,7 +132,7 @@ function trayImage() {
   ).resize({ width: 18, height: 18 });
 }
 
-function embedPlannerIntoWorkerW(): void {
+function embedPlannerIntoWorkerW(attempt = 0): void {
   if (process.platform !== 'win32' || !plannerWindow || plannerWindow.isDestroyed()) return;
 
   const hwndBuffer = plannerWindow.getNativeWindowHandle();
@@ -239,7 +236,11 @@ if (-not [DesktopEmbed]::Embed($hwnd)) { exit 2 }
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded, hwnd.toString()],
     { windowsHide: true },
     (error) => {
-      if (error) console.warn('Desktop WorkerW embedding failed:', error.message);
+      if (!error) return;
+      console.warn('Desktop WorkerW embedding failed:', error.message);
+      if (attempt < 4 && plannerWindow && !plannerWindow.isDestroyed() && !quitting) {
+        setTimeout(() => embedPlannerIntoWorkerW(attempt + 1), 700);
+      }
     }
   );
 }
@@ -277,6 +278,7 @@ function showPlanner(): void {
     return;
   }
   plannerWindow.showInactive();
+  if (process.platform === 'win32') setTimeout(embedPlannerIntoWorkerW, 80);
 }
 
 function createPlannerWindow(url: string): void {
@@ -434,6 +436,22 @@ function setAutoLaunch(enabled: boolean): void {
   app.setLoginItemSettings({ openAtLogin: enabled });
 }
 
+function showTestNotification(): void {
+  if (!Notification.isSupported()) {
+    void dialog.showMessageBox({
+      type: 'warning',
+      title: '测试提醒',
+      message: '当前系统不支持 Electron 原生通知。'
+    });
+    return;
+  }
+  const test = new Notification({
+    title: '私人助理提醒',
+    body: '这是一条测试提醒。如果你看到它，Windows 原生提醒通道工作正常。'
+  });
+  test.show();
+}
+
 function createTray(): void {
   tray = new Tray(trayImage());
   tray.setToolTip('私人助理');
@@ -441,6 +459,7 @@ function createTray(): void {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开桌面周计划', click: showPlanner },
     { label: '打开完整私人助理', click: showWindow },
+    { label: '测试系统提醒', click: showTestNotification },
     { label: '导入旧数据库…', click: () => { void importLegacyDatabase(); } },
     {
       label: '开机自动启动',
