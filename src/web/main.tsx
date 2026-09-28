@@ -181,7 +181,7 @@ function WeekPlanner() {
     const value = text.trim(); if (!value) return;
     try {
       if (aiEnabled) {
-        const aiText = date ? value + '。这是计划执行日期：' + date + '，不是截止日期；请将 start_at 设为这一天，并保留用户明确提到的截止日期和提醒时间。' : value;
+        const aiText = value;
         const result = await api<{ summary: string }>('/api/personal/capture', { method: 'POST', body: JSON.stringify({ text: aiText, forcedStartAt: date ?? null }) });
         setMessage(result.summary);
       } else {
