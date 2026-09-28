@@ -107,7 +107,6 @@ function WeekPlanner() {
   const [selectedTask, setSelectedTask] = useState<TaskDetailsResponse | null>(null);
   const [inlineDay, setInlineDay] = useState<string | null>(null);
   const [inlineValue, setInlineValue] = useState('');
-  const [resizing, setResizing] = useState(false);
   const [splitPercent, setSplitPercent] = useState(() => Number(localStorage.getItem('week-planner-split') ?? '35'));
   const plannerBoardRef = useRef<HTMLElement | null>(null);
 
@@ -206,37 +205,6 @@ function WeekPlanner() {
     await addTask(value, day);
     setInlineValue('');
     setInlineDay(null);
-  }
-
-  function startResize(event: React.PointerEvent<HTMLDivElement>, mode: 'width'|'height'|'both') {
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.screenX;
-    const startY = event.screenY;
-    const startWidth = window.innerWidth;
-    const startHeight = window.innerHeight;
-    setResizing(true);
-
-    const move = (moveEvent: PointerEvent) => {
-      const dx = moveEvent.screenX - startX;
-      const dy = moveEvent.screenY - startY;
-      const width = mode === 'height' ? startWidth : Math.max(420, startWidth + dx);
-      const height = mode === 'width' ? startHeight : Math.max(300, startHeight + dy);
-      void fetch('/api/desktop/widget/resize', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ width, height })
-      }).catch(() => {});
-    };
-
-    const up = () => {
-      setResizing(false);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
   }
 
   function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
@@ -380,9 +348,6 @@ function WeekPlanner() {
           </div>
         </section>
       </section>
-      <div className='planner-resize-edge planner-resize-right' onPointerDown={(e) => startResize(e, 'width')} title='拖动调整宽度' />
-      <div className='planner-resize-edge planner-resize-bottom' onPointerDown={(e) => startResize(e, 'height')} title='拖动调整高度' />
-      <div className={resizing ? 'planner-resize-handle active' : 'planner-resize-handle'} onPointerDown={(e) => startResize(e, 'both')} title='拖动自由调整宽高' />
       {selectedTask ? <div className='planner-detail-backdrop' onClick={() => setSelectedTask(null)}>
         <aside className='planner-detail' onClick={(e) => e.stopPropagation()}>
           <div className='planner-detail-head'><div><small>任务详情</small><h3>{selectedTask.task.starred ? '★ ' : ''}{selectedTask.task.title}</h3></div><button type='button' className='planner-detail-close' onClick={() => setSelectedTask(null)}><X size={17}/></button></div>
