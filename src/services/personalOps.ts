@@ -11,6 +11,7 @@ export interface ScheduleItem {
   start_at: string | null;
   end_at: string | null;
   location: string | null;
+  reminder_at: string | null;
   status: string;
   notes: string | null;
   created_at: string;
@@ -55,7 +56,7 @@ function toSchedule(row: Row): ScheduleItem {
   return {
     id: String(row.id), title: String(row.title), kind: String(row.kind),
     start_at: ns(row.start_at), end_at: ns(row.end_at), location: ns(row.location),
-    status: String(row.status), notes: ns(row.notes),
+    reminder_at: ns(row.reminder_at), status: String(row.status), notes: ns(row.notes),
     created_at: String(row.created_at), updated_at: String(row.updated_at)
   };
 }
@@ -89,9 +90,9 @@ export function listScheduleItems(db: DatabaseSync): ScheduleItem[] {
 export function createScheduleItem(db: DatabaseSync, input: Partial<ScheduleItem> & {title:string}, at=nowIso()): ScheduleItem {
   const id=randomUUID();
   db.prepare(`
-    insert into schedule_items (id,title,kind,start_at,end_at,location,status,notes,created_at,updated_at)
-    values (?,?,?,?,?,?,?,?,?,?)
-  `).run(id,input.title.trim(),input.kind ?? 'other',input.start_at ?? null,input.end_at ?? null,input.location ?? null,input.status ?? 'scheduled',input.notes ?? null,at,at);
+    insert into schedule_items (id,title,kind,start_at,end_at,location,reminder_at,status,notes,created_at,updated_at)
+    values (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(id,input.title.trim(),input.kind ?? 'other',input.start_at ?? null,input.end_at ?? null,input.location ?? null,input.reminder_at ?? null,input.status ?? 'scheduled',input.notes ?? null,at,at);
   const row=db.prepare('select * from schedule_items where id=?').get(id) as Row;
   return toSchedule(row);
 }
