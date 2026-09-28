@@ -1,5 +1,5 @@
 import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles, Star, X, Plus, Trash2, RotateCcw, Settings, Save } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -41,6 +41,9 @@ interface ScheduleItem {
   title: string;
   kind: string;
   start_at: string | null;
+  end_at?: string | null;
+  reminder_at?: string | null;
+  location?: string | null;
   status: string;
 }
 
@@ -95,6 +98,7 @@ function startOfWeekMonday(now = new Date()): Date {
 
 function WeekPlanner() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [input, setInput] = useState('');
   const [aiEnabled, setAiEnabled] = useState(() => localStorage.getItem('week-planner-ai') === '1');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('week-planner-opacity') ?? '0.94'));
@@ -104,6 +108,8 @@ function WeekPlanner() {
   const [inlineDay, setInlineDay] = useState<string | null>(null);
   const [inlineValue, setInlineValue] = useState('');
   const [resizing, setResizing] = useState(false);
+  const [splitPercent, setSplitPercent] = useState(() => Number(localStorage.getItem('week-planner-split') ?? '35'));
+  const plannerBoardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void refreshPlanner();
@@ -115,6 +121,7 @@ function WeekPlanner() {
   }, []);
 
   useEffect(() => { localStorage.setItem('week-planner-ai', aiEnabled ? '1' : '0'); }, [aiEnabled]);
+  useEffect(() => { localStorage.setItem('week-planner-split', String(splitPercent)); }, [splitPercent]);
 
   useEffect(() => {
     const safe = Math.max(0.58, Math.min(1, opacity));
@@ -123,8 +130,12 @@ function WeekPlanner() {
   }, [opacity]);
 
   async function refreshPlanner() {
-    const result = await api<{ tasks: Task[] }>('/api/tasks/planning');
-    setTasks(result.tasks);
+    const [taskResult, personal] = await Promise.all([
+      api<{ tasks: Task[] }>('/api/tasks/planning'),
+      api<{ schedule: ScheduleItem[] }>('/api/personal/dashboard')
+    ]);
+    setTasks(taskResult.tasks);
+    setScheduleItems(personal.schedule ?? []);
   }
 
   async function openPlannerTask(taskId: string) {
@@ -197,18 +208,20 @@ function WeekPlanner() {
     setInlineDay(null);
   }
 
-  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+  function startResize(event: React.PointerEvent<HTMLDivElement>, mode: 'width'|'height'|'both') {
     event.preventDefault();
     event.stopPropagation();
-    const startX = event.clientX;
-    const startY = event.clientY;
+    const startX = event.screenX;
+    const startY = event.screenY;
     const startWidth = window.innerWidth;
     const startHeight = window.innerHeight;
     setResizing(true);
 
     const move = (moveEvent: PointerEvent) => {
-      const width = Math.max(560, startWidth + moveEvent.clientX - startX);
-      const height = Math.max(420, startHeight + moveEvent.clientY - startY);
+      const dx = moveEvent.screenX - startX;
+      const dy = moveEvent.screenY - startY;
+      const width = mode === 'height' ? startWidth : Math.max(420, startWidth + dx);
+      const height = mode === 'width' ? startHeight : Math.max(300, startHeight + dy);
       void fetch('/api/desktop/widget/resize', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -218,6 +231,27 @@ function WeekPlanner() {
 
     const up = () => {
       setResizing(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+  }
+
+  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const board = plannerBoardRef.current;
+    if (!board) return;
+    const rect = board.getBoundingClientRect();
+
+    const move = (moveEvent: PointerEvent) => {
+      const next = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      setSplitPercent(Math.max(20, Math.min(60, next)));
+    };
+
+    const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
     };
@@ -240,6 +274,11 @@ function WeekPlanner() {
   function dropOnDate(event: React.DragEvent, date: string | null) { event.preventDefault(); const taskId = event.dataTransfer.getData('text/task-id'); if (taskId) void planTask(taskId, date); }
 
   async function completePlannerTask(taskId: string) {
+    const details = selectedTask?.task.id === taskId
+      ? selectedTask
+      : await api<TaskDetailsResponse>('/api/tasks/' + taskId + '/details');
+    const incomplete = details.steps.filter((step) => !step.completed).length;
+    if (incomplete > 0 && !window.confirm('还有 ' + incomplete + ' 个子任务未完成，仍然完成主任务吗？')) return;
     await api('/api/tasks/' + taskId + '/complete', { method: 'POST', body: JSON.stringify({ createdBy: 'week-planner' }) });
     if (selectedTask?.task.id === taskId) setSelectedTask(null);
     await refreshPlanner();
@@ -248,6 +287,32 @@ function WeekPlanner() {
   async function togglePlannerStep(step: TaskStep) {
     await api('/api/tasks/steps/' + step.id, { method: 'PATCH', body: JSON.stringify({ completed: !step.completed }) });
     if (selectedTask) await openPlannerTask(selectedTask.task.id);
+  }
+
+  function schedulesForDay(key: string) {
+    return scheduleItems
+      .filter((item) => item.status === 'scheduled' && item.start_at?.slice(0, 10) === key)
+      .sort((a, b) => (a.start_at ?? '').localeCompare(b.start_at ?? ''));
+  }
+
+  function scheduleTime(item: ScheduleItem): string | null {
+    if (!item.start_at || item.start_at.length <= 10) return null;
+    const d = new Date(item.start_at);
+    if (Number.isNaN(d.getTime())) return item.start_at.slice(11,16);
+    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  }
+
+  function scheduleCard(item: ScheduleItem) {
+    const time = scheduleTime(item);
+    const kindMap: Record<string,string> = {
+      interview: '面试', written_test: '笔试', meeting: '会议', exam: '考试', other: '日程'
+    };
+    return (
+      <div className='planner-schedule-card' key={'schedule-' + item.id} title={item.location ? '地点：' + item.location : '固定日程'}>
+        <span className='planner-schedule-kind'>{kindMap[item.kind] ?? '日程'}</span>
+        <span className='planner-schedule-title'>{time ? time + ' ' : ''}{item.title}</span>
+      </div>
+    );
   }
 
   const todayKey = dateOnlyLocal(now);
@@ -261,12 +326,13 @@ function WeekPlanner() {
 
   function plannerTask(task: Task, compact = false) {
     const plannedDay = dayLabelForTask(task); const time = planTime(task);
+    const overdue = Boolean(task.start_at && task.start_at.slice(0,10) < todayKey);
     return (
       <div className={compact ? 'planner-task compact' : 'planner-task'} key={task.id} draggable onDragStart={(e) => dragStart(e, task.id)}>
         <button className='planner-check' type='button' title='完成' onClick={(e) => { e.stopPropagation(); void completePlannerTask(task.id); }}><Check size={13}/></button>
         <button className='planner-task-title' type='button' onClick={(e) => { e.stopPropagation(); void openPlannerTask(task.id); }} onDoubleClick={(e) => e.stopPropagation()} title='点击查看详情与子任务'>
           <span>{task.starred ? '★ ' : ''}{time ? time + ' ' : ''}{task.title}</span>
-          {!compact && plannedDay ? <small>{plannedDay}</small> : null}
+          {!compact ? <small>{overdue ? '逾期' : plannedDay ?? ''}</small> : null}
         </button>
       </div>
     );
@@ -284,19 +350,21 @@ function WeekPlanner() {
         <span className='planner-clock'>{clock}</span>
       </header>
       {message ? <div className='planner-message'>{message}</div> : null}
-      <section className='planner-board'>
+      <section className='planner-board' ref={plannerBoardRef} style={{ '--planner-left': splitPercent + '%' } as React.CSSProperties}>
         <aside className='planner-all' onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, null)}>
           <div className='planner-section-title'><div><strong>所有任务</strong><small>拖到右侧只安排执行日期</small></div><span>{allTasks.length}</span></div>
           <div className='planner-task-stack'>{allTasks.map((task) => plannerTask(task))}{!allTasks.length ? <p className='planner-empty'>暂无任务</p> : null}</div>
         </aside>
+        <div className='planner-splitter' onPointerDown={startSplitResize} title='拖动调整左右栏宽度' />
         <section className='planner-week'>
           <div className='planner-section-title'><div><strong>本周</strong><small>双击空白添加 · 拖动改计划日期</small></div><span>{weekDays[0].key.slice(5)} — {weekDays[6].key.slice(5)}</span></div>
           <div className='planner-days'>
             {weekDays.map((day) => {
-              const dayTasks = tasksForDay(day.key); const isToday = day.key === todayKey;
+              const dayTasks = tasksForDay(day.key); const daySchedules = schedulesForDay(day.key); const isToday = day.key === todayKey;
               return <div key={day.key} className={isToday ? 'planner-day today' : 'planner-day'} onDoubleClick={() => quickAddForDay(day)} onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, day.key)}>
                 <div className='planner-day-head'><strong>{day.weekday}</strong><span>{day.key.slice(5).replace('-', '/')}</span>{isToday ? <em>今天</em> : null}</div>
                 <div className='planner-day-tasks'>
+                  {daySchedules.map(scheduleCard)}
                   {dayTasks.map((task) => plannerTask(task, true))}
                   {inlineDay === day.key ? (
                     <form className='planner-inline-add' onSubmit={(e) => { e.preventDefault(); void submitInlineDay(day.key); }} onDoubleClick={(e) => e.stopPropagation()}>
@@ -305,14 +373,16 @@ function WeekPlanner() {
                         onBlur={() => { if (!inlineValue.trim()) setInlineDay(null); }}
                         placeholder='输入任务，Enter 保存' />
                     </form>
-                  ) : !dayTasks.length ? <span className='planner-day-hint'>双击添加</span> : null}
+                  ) : !dayTasks.length && !daySchedules.length ? <span className='planner-day-hint'>双击添加</span> : null}
                 </div>
               </div>;
             })}
           </div>
         </section>
       </section>
-      <div className={resizing ? 'planner-resize-handle active' : 'planner-resize-handle'} onPointerDown={startResize} title='拖动调整挂件大小' />
+      <div className='planner-resize-edge planner-resize-right' onPointerDown={(e) => startResize(e, 'width')} title='拖动调整宽度' />
+      <div className='planner-resize-edge planner-resize-bottom' onPointerDown={(e) => startResize(e, 'height')} title='拖动调整高度' />
+      <div className={resizing ? 'planner-resize-handle active' : 'planner-resize-handle'} onPointerDown={(e) => startResize(e, 'both')} title='拖动自由调整宽高' />
       {selectedTask ? <div className='planner-detail-backdrop' onClick={() => setSelectedTask(null)}>
         <aside className='planner-detail' onClick={(e) => e.stopPropagation()}>
           <div className='planner-detail-head'><div><small>任务详情</small><h3>{selectedTask.task.starred ? '★ ' : ''}{selectedTask.task.title}</h3></div><button type='button' className='planner-detail-close' onClick={() => setSelectedTask(null)}><X size={17}/></button></div>
@@ -422,6 +492,11 @@ function App() {
   }
 
   async function completeTask(taskId: string) {
+    const details = selectedTask?.task.id === taskId
+      ? selectedTask
+      : await api<TaskDetailsResponse>(`/api/tasks/${taskId}/details`);
+    const incomplete = details.steps.filter((step) => !step.completed).length;
+    if (incomplete > 0 && !window.confirm(`还有 ${incomplete} 个子任务未完成，仍然完成主任务吗？`)) return;
     await api(`/api/tasks/${taskId}/complete`, { method: 'POST', body: JSON.stringify({ createdBy: 'web' }) });
     if (selectedTask?.task.id === taskId) setSelectedTask(null);
     await refresh();
