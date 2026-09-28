@@ -39,7 +39,54 @@ function applyForcedDate(
   return day;
 }
 
+
+function parseSmallChineseNumber(value: string): number | null {
+  if (/^\d+$/.test(value)) return Number(value);
+  const digits: Record<string, number> = { 零:0, 一:1, 二:2, 两:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9 };
+  if (value === '十') return 10;
+  if (value.startsWith('十')) return 10 + (digits[value.slice(1)] ?? 0);
+  if (value.endsWith('十')) return (digits[value.slice(0, -1)] ?? 0) * 10;
+  if (value.includes('十')) {
+    const [tens, ones] = value.split('十');
+    return (digits[tens] ?? 0) * 10 + (digits[ones] ?? 0);
+  }
+  return digits[value] ?? null;
+}
+
+export function parseRelativeReminder(text: string, now = new Date()): { title: string; reminderAt: string } | null {
+  const match = text.trim().match(/^([零一二两三四五六七八九十\d]+)\s*(分钟|小时|天)后\s*提醒我(?:\s*(.*))?$/);
+  if (!match) return null;
+  const amount = parseSmallChineseNumber(match[1]);
+  if (!amount || amount <= 0) return null;
+  const unitMs = match[2] === '分钟' ? 60_000 : match[2] === '小时' ? 3_600_000 : 86_400_000;
+  return {
+    title: (match[3] ?? '').trim() || '提醒',
+    reminderAt: new Date(now.getTime() + amount * unitMs).toISOString()
+  };
+}
+
 export async function aiCapture(db: DatabaseSync, text: string, options: { forcedStartAt?: string | null } = {}): Promise<UnifiedCaptureResult & { provider: string }> {
+  const relativeReminder = parseRelativeReminder(text);
+  if (relativeReminder) {
+    const task = createTask(db, {
+      title: relativeReminder.title,
+      status: 'scheduled',
+      priority: 'medium',
+      importance: 3,
+      urgency: 3,
+      startAt: relativeReminder.reminderAt,
+      reminderAt: relativeReminder.reminderAt,
+      deadlineAt: null
+    }, 'relative-reminder');
+    return {
+      category: 'task',
+      summary: `已设置提醒：${new Date(relativeReminder.reminderAt).toLocaleTimeString('zh-CN', { hour12: false })}`,
+      record: task,
+      actions: [{ index: 0 }],
+      provider: 'local'
+    };
+  }
+
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) {
     if (options.forcedStartAt) {
@@ -102,7 +149,7 @@ steps只放“需要逐项完成”的子任务；points只放“重要提醒/�
 - “截止/最晚/DDL/必须在某时前完成”才填写 deadline_at。
 - “提醒我/到点叫我”才填写 reminder_at。
 修改已有任务时，只修改用户明确要求变化的字段；没有提到的状态、截止时间、提醒时间等必须保持不变。
-如果用户说“提醒我做某事/到点提醒我做某事”，必须创建或更新 task，不要创建 schedule；若没有另外指定计划执行时间，则 start_at 与 reminder_at 使用同一时间。
+如果用户说“提醒我做某事/到点提醒我做某事”，必须且只能生成一个 task 或 update_task，不要创建重复 task，也不要创建 schedule；若没有另外指定计划执行时间，则 start_at 与 reminder_at 使用同一时间。
 schedule只用于“固定发生的事件”，例如面试、笔试、会议、考试，字段title,kind(interview/written_test/meeting/exam/other),start_at,end_at,reminder_at,location,notes。
 不要把任务DDL单独创建为schedule；“论文周五截止”应是task.deadline_at。
 不要把“提醒我做某事”创建为schedule；它应是task.reminder_at，并在未指定计划时间时让task.start_at=reminder_at。
@@ -125,7 +172,14 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
   const raw = payload?.choices?.[0]?.message?.content;
   if (!raw) throw new Error('DeepSeek 没有返回可解析内容。');
   const parsed = JSON.parse(stripFence(String(raw))) as { actions?: AiAction[]; summary?: string };
-  const actions = Array.isArray(parsed.actions) ? parsed.actions : [];
+  let actions = Array.isArray(parsed.actions) ? parsed.actions : [];
+  if (/提醒我|到点叫我/.test(text)) {
+    const taskLike = actions.filter((action) => action.type === 'task' || action.type === 'update_task');
+    if (taskLike.length > 1) {
+      const preferred = taskLike.find((action) => 'reminder_at' in action && Boolean(action.reminder_at)) ?? taskLike[0];
+      actions = [preferred, ...actions.filter((action) => action.type !== 'task' && action.type !== 'update_task' && action.type !== 'schedule')];
+    }
+  }
   const saved: unknown[] = [];
 
   for (const action of actions) {
