@@ -949,8 +949,8 @@ small {
 
 .planner-board {
   display: grid;
-  grid-template-columns: minmax(250px, 35%) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(150px, var(--planner-left, 35%)) 8px minmax(0, 1fr);
+  gap: 6px;
   margin-top: 12px;
   height: calc(100vh - 88px);
 }
@@ -1026,8 +1026,9 @@ small {
 }
 
 .planner-task.compact {
+  flex: 1 1 150px;
   width: auto;
-  min-width: 130px;
+  min-width: 110px;
   max-width: 100%;
   min-height: 34px;
   padding: 5px 7px;
@@ -1304,7 +1305,7 @@ small {
   width: 100%;
 }
 
-@media (max-width: 850px) {
+@media (max-width: 650px) {
   .week-planner-header {
     grid-template-columns: 1fr auto;
   }
@@ -1318,6 +1319,9 @@ small {
   .planner-board {
     grid-template-columns: 1fr;
     height: auto;
+  }
+  .planner-splitter {
+    display: none;
   }
   .planner-all {
     max-height: 260px;
@@ -1381,4 +1385,103 @@ small {
 .planner-resize-handle:hover,
 .planner-resize-handle.active {
   opacity: .82;
+}
+
+.planner-splitter {
+  align-self: stretch;
+  width: 8px;
+  min-width: 8px;
+  cursor: ew-resize;
+  position: relative;
+  -webkit-app-region: no-drag;
+  touch-action: none;
+}
+
+.planner-splitter::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(129,141,160,.22);
+  transition: background .15s ease, width .15s ease;
+}
+
+.planner-splitter:hover::after {
+  width: 3px;
+  background: rgba(59,109,242,.55);
+}
+
+.planner-schedule-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex: 1 1 150px;
+  min-width: 110px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d9e3f6;
+  border-left: 3px solid #7f9fe8;
+  border-radius: 9px;
+  background: rgba(244,248,255,.97);
+  color: #344054;
+}
+
+.planner-schedule-kind {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #e6edff;
+  color: #4f6fbd;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.planner-schedule-title {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.planner-resize-edge {
+  position: fixed;
+  z-index: 2490;
+  -webkit-app-region: no-drag;
+  touch-action: none;
+}
+
+.planner-resize-right {
+  top: 28px;
+  right: 0;
+  width: 9px;
+  height: calc(100vh - 56px);
+  cursor: ew-resize;
+}
+
+.planner-resize-bottom {
+  left: 28px;
+  bottom: 0;
+  width: calc(100vw - 56px);
+  height: 9px;
+  cursor: ns-resize;
+}
+
+.planner-task,
+.planner-task-title,
+.planner-task-title span,
+.planner-subtask,
+.planner-points li {
+  min-width: 0;
+}
+
+.planner-task-title span,
+.planner-subtask span:last-child,
+.planner-points li {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
