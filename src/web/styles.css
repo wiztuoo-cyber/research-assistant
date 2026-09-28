@@ -829,11 +829,13 @@ small {
 }
 
 .week-planner-shell {
-  min-height: 100vh;
-  padding: 12px;
+  height: 100vh;
+  min-height: 0;
+  padding: 10px;
   color: #1f2937;
   background: transparent;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .week-planner-header {
@@ -951,8 +953,9 @@ small {
   display: grid;
   grid-template-columns: minmax(150px, var(--planner-left, 35%)) 8px minmax(0, 1fr);
   gap: 6px;
-  margin-top: 12px;
-  height: calc(100vh - 88px);
+  margin-top: 10px;
+  height: calc(100vh - 78px);
+  min-height: 0;
 }
 
 .planner-all,
@@ -1307,27 +1310,51 @@ small {
 
 @media (max-width: 650px) {
   .week-planner-header {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0,1fr) auto;
+    padding: 8px;
   }
   .planner-capture {
     grid-column: 1 / -1;
     grid-row: 2;
   }
-  .opacity-control {
+  .opacity-control,
+  .planner-clock {
     display: none;
   }
   .planner-board {
     grid-template-columns: 1fr;
-    height: auto;
+    height: calc(100vh - 92px);
+    overflow-y: auto;
+    padding-right: 2px;
   }
   .planner-splitter {
     display: none;
   }
   .planner-all {
-    max-height: 260px;
+    min-height: 130px;
+    max-height: 34vh;
+  }
+  .planner-week {
+    min-height: 360px;
   }
   .planner-days {
-    grid-template-rows: repeat(7, minmax(88px, auto));
+    grid-template-rows: repeat(7, minmax(70px, auto));
+  }
+}
+
+@media (max-height: 420px) {
+  .week-planner-header {
+    padding: 6px 8px;
+  }
+  .planner-capture input,
+  .planner-capture button {
+    min-height: 32px;
+  }
+  .planner-board {
+    height: calc(100vh - 70px);
+  }
+  .planner-section-title small {
+    display: none;
   }
 }
 
@@ -1346,46 +1373,6 @@ small {
   box-shadow: 0 0 0 3px rgba(59,109,242,.08);
 }
 
-.planner-resize-handle {
-  position: fixed;
-  right: 3px;
-  bottom: 3px;
-  width: 22px;
-  height: 22px;
-  z-index: 2500;
-  cursor: nwse-resize;
-  -webkit-app-region: no-drag;
-  touch-action: none;
-  opacity: .36;
-}
-
-.planner-resize-handle::before,
-.planner-resize-handle::after {
-  content: "";
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  border-right: 2px solid #758198;
-  border-bottom: 2px solid #758198;
-  border-radius: 1px;
-}
-
-.planner-resize-handle::before {
-  width: 12px;
-  height: 12px;
-}
-
-.planner-resize-handle::after {
-  width: 6px;
-  height: 6px;
-  right: 8px;
-  bottom: 8px;
-}
-
-.planner-resize-handle:hover,
-.planner-resize-handle.active {
-  opacity: .82;
-}
 
 .planner-splitter {
   align-self: stretch;
@@ -1447,28 +1434,6 @@ small {
   word-break: break-word;
 }
 
-.planner-resize-edge {
-  position: fixed;
-  z-index: 2490;
-  -webkit-app-region: no-drag;
-  touch-action: none;
-}
-
-.planner-resize-right {
-  top: 28px;
-  right: 0;
-  width: 9px;
-  height: calc(100vh - 56px);
-  cursor: ew-resize;
-}
-
-.planner-resize-bottom {
-  left: 28px;
-  bottom: 0;
-  width: calc(100vw - 56px);
-  height: 9px;
-  cursor: ns-resize;
-}
 
 .planner-task,
 .planner-task-title,
