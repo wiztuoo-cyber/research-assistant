@@ -83,7 +83,7 @@ delete_task字段：task_id。
 add_step字段：task_id,title。
 add_point字段：task_id,content。
 如果用户说“这两个任务”“上面的任务”“今天这两个”等，要根据已有任务列表匹配对应task_id并分别生成动作。
-如果用户只说“明天”“后天”而没有具体时刻，deadline_at只写YYYY-MM-DD，不要擅自添加09:00。
+日期没有具体时刻时不要擅自添加09:00。“明天做/安排某事”应把start_at写成YYYY-MM-DD；只有“明天截止/DDL”才把deadline_at写成YYYY-MM-DD。
 task字段：title,status(today/next/scheduled/waiting/someday),priority(low/medium/high),start_at(计划执行时间，ISO或YYYY-MM-DD或null),deadline_at(截止时间，ISO或null),reminder_at(提醒时间，带本地时区偏移的ISO或null),notes,starred(boolean),steps(string数组),points(string数组)。计划执行时间、截止时间、提醒时间是三个独立概念，不能互相替代。有明确计划执行日期时填写start_at。用户明确说“提醒我”时必须填写reminder_at；例如今晚20:00应转换为包含当前本地时区偏移的完整ISO时间。
 steps只放“需要逐项完成”的子任务；points只放“重要提醒/要点/约束”，不要把同一句同时放进steps和points。用户说“重要/很重要/优先”时starred=true。
 时间分层：今天必须做= today；本周/近期/无明确长期字样=next；等待别人/结果=waiting；长期/以后/有空再做=someday。
@@ -132,7 +132,13 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority,
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : undefined,
         urgency: action.status === 'today' ? 5 : action.status ? 3 : undefined,
-        startAt: options.forcedStartAt ?? action.start_at ?? action.reminder_at,
+        startAt: options.forcedStartAt
+          ? applyForcedDate(options.forcedStartAt, action.start_at ?? action.reminder_at)
+          : action.start_at !== undefined
+            ? action.start_at
+            : action.reminder_at && !activeTasks.find((task) => task.id === action.task_id)?.start_at
+              ? action.reminder_at
+              : undefined,
         deadlineAt: action.deadline_at,
         reminderAt: action.reminder_at,
         notes: action.notes
@@ -152,7 +158,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         priority: action.priority ?? 'medium',
         importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : 3,
         urgency: action.status === 'today' ? 5 : 3,
-        startAt: options.forcedStartAt ?? action.start_at ?? action.reminder_at ?? null,
+        startAt: applyForcedDate(options.forcedStartAt, action.start_at ?? action.reminder_at ?? null) ?? null,
         deadlineAt: action.deadline_at ?? null,
         reminderAt: action.reminder_at ?? null,
         notes: action.notes ?? null
@@ -165,7 +171,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
       saved.push(createScheduleItem(db, {
         title: action.title,
         kind: action.kind ?? 'other',
-        start_at: action.start_at ?? null,
+        start_at: applyForcedDate(options.forcedStartAt, action.start_at ?? null) ?? null,
         end_at: action.end_at ?? null,
         reminder_at: action.reminder_at ?? null,
         location: action.location ?? null,
