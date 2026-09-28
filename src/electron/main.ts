@@ -19,6 +19,7 @@ let db: DatabaseSync | null = null;
 let quitting = false;
 const firedReminders = new Set<string>();
 let reminderTimer: NodeJS.Timeout | null = null;
+let desktopWidgetTimer: NodeJS.Timeout | null = null;
 const reminderWindows = new Set<BrowserWindow>();
 
 function reminderStatePath(): string {
@@ -138,7 +139,7 @@ function widgetStatePath(): string {
   return join(app.getPath('userData'), 'widget-window.json');
 }
 
-function readWidgetBounds(): Partial<{ x:number; y:number; width:number; height:number }> {
+function readWidgetBounds(): Partial<{ x:number; y:number; width:number; height:number; layoutVersion:number }> {
   try {
     return JSON.parse(readFileSync(widgetStatePath(), 'utf8'));
   } catch {
@@ -150,7 +151,7 @@ function saveWidgetBounds(): void {
   if (!plannerWindow || plannerWindow.isDestroyed()) return;
   try {
     const bounds = plannerWindow.getBounds();
-    writeFileSync(widgetStatePath(), JSON.stringify(bounds), 'utf8');
+    writeFileSync(widgetStatePath(), JSON.stringify({ ...bounds, layoutVersion: 3 }), 'utf8');
   } catch {}
 }
 
@@ -173,21 +174,32 @@ function createPlannerWindow(url: string): void {
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
   const saved = readWidgetBounds();
-  const width = saved.width ?? Math.min(980, Math.max(760, Math.round(work.width * 0.72)));
-  const height = saved.height ?? Math.min(760, Math.max(600, Math.round(work.height * 0.78)));
+  const legacyBounds = saved.layoutVersion !== 3;
+  const defaultWidth = Math.min(560, Math.max(360, work.width - 40));
+  const defaultHeight = Math.min(460, Math.max(260, work.height - 80));
+  const width = legacyBounds
+    ? defaultWidth
+    : Math.max(320, Math.min(saved.width ?? defaultWidth, work.width));
+  const height = legacyBounds
+    ? defaultHeight
+    : Math.max(220, Math.min(saved.height ?? defaultHeight, work.height));
 
   plannerWindow = new BrowserWindow({
     width,
     height,
-    x: saved.x ?? work.x + Math.max(0, work.width - width - 18),
-    y: saved.y ?? work.y + 18,
-    minWidth: 420,
-    minHeight: 300,
+    x: legacyBounds ? work.x + Math.max(0, work.width - width - 18) : (saved.x ?? work.x + Math.max(0, work.width - width - 18)),
+    y: legacyBounds ? work.y + 18 : (saved.y ?? work.y + 18),
+    minWidth: 320,
+    minHeight: 220,
     resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    thickFrame: true,
     title: '私人助理 · 本周计划',
     frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    transparent: false,
+    backgroundColor: '#f4f6fa',
     autoHideMenuBar: true,
     skipTaskbar: true,
     alwaysOnTop: false,
@@ -204,12 +216,26 @@ function createPlannerWindow(url: string): void {
   plannerWindow.once('ready-to-show', () => plannerWindow?.showInactive());
   plannerWindow.on('move', saveWidgetBounds);
   plannerWindow.on('resize', saveWidgetBounds);
+  plannerWindow.on('minimize', () => {
+    setTimeout(() => {
+      if (plannerWindow && !plannerWindow.isDestroyed() && !quitting) {
+        if (plannerWindow.isMinimized()) plannerWindow.restore();
+        plannerWindow.showInactive();
+      }
+    }, 40);
+  });
   plannerWindow.on('close', (event) => {
     if (!quitting) {
       event.preventDefault();
       plannerWindow?.hide();
     }
   });
+}
+
+function keepPlannerOnDesktop(): void {
+  if (!plannerWindow || plannerWindow.isDestroyed() || quitting) return;
+  if (plannerWindow.isMinimized()) plannerWindow.restore();
+  if (!plannerWindow.isVisible()) plannerWindow.showInactive();
 }
 
 async function startLocalServer(): Promise<number> {
@@ -379,6 +405,7 @@ if (!gotLock) {
     createTray();
 
     reminderTimer = setInterval(checkWindowsReminders, 30000);
+    desktopWidgetTimer = setInterval(keepPlannerOnDesktop, 750);
     checkWindowsReminders();
 
     globalShortcut.register('CommandOrControl+Alt+A', showPlanner);
@@ -393,6 +420,7 @@ if (!gotLock) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     if (reminderTimer) clearInterval(reminderTimer);
+    if (desktopWidgetTimer) clearInterval(desktopWidgetTimer);
     server?.close();
     plannerWindow?.destroy();
     for (const popup of reminderWindows) if (!popup.isDestroyed()) popup.destroy();
