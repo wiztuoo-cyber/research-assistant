@@ -298,6 +298,15 @@ export const migrations: Migration[] = [
       create index if not exists idx_task_points_task_position
         on task_points(task_id, position, created_at);
     `
+  },
+  {
+    id: '0006_schedule_reminders',
+    sql: `
+      alter table schedule_items add column reminder_at text;
+
+      create index if not exists idx_schedule_items_reminder
+        on schedule_items(reminder_at);
+    `
   }
 ];
 
