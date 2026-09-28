@@ -85,8 +85,11 @@ function showReminderPopup(title: string): void {
 
 function checkWindowsReminders(): void {
   if (!db) return;
-  const now = Date.now();
-  const rows = db.prepare(`
+  const now = new Date();
+  const nowMs = now.getTime();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const taskRows = db.prepare(`
     select id, title, reminder_at
     from tasks
     where deleted_at is null
@@ -95,14 +98,27 @@ function checkWindowsReminders(): void {
       and trim(reminder_at) != ''
   `).all() as Array<{id:string;title:string;reminder_at:string}>;
 
+  const scheduleRows = db.prepare(`
+    select id, title, reminder_at
+    from schedule_items
+    where status='scheduled'
+      and reminder_at is not null
+      and trim(reminder_at) != ''
+  `).all() as Array<{id:string;title:string;reminder_at:string}>;
+
+  const rows = [
+    ...taskRows.map((row) => ({ ...row, source: 'task' })),
+    ...scheduleRows.map((row) => ({ ...row, source: 'schedule' }))
+  ];
+
   for (const row of rows) {
     const due = new Date(row.reminder_at).getTime();
-    if (!Number.isFinite(due) || due > now) continue;
-    const key = `${row.id}|${row.reminder_at}`;
+    if (!Number.isFinite(due) || due > nowMs) continue;
+    if (due < dayStart) continue;
+    const key = `${row.source}|${row.id}|${row.reminder_at}`;
     if (firedReminders.has(key)) continue;
     firedReminders.add(key);
     saveFiredReminders();
-
     showReminderPopup(row.title);
   }
 }
@@ -165,8 +181,9 @@ function createPlannerWindow(url: string): void {
     height,
     x: saved.x ?? work.x + Math.max(0, work.width - width - 18),
     y: saved.y ?? work.y + 18,
-    minWidth: 720,
-    minHeight: 560,
+    minWidth: 420,
+    minHeight: 300,
+    resizable: true,
     title: '私人助理 · 本周计划',
     frame: false,
     transparent: true,
