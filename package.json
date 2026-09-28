@@ -1,6 +1,6 @@
 {
   "name": "research-assistant",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": false,
   "description": "Local-first AI-friendly research task and computation manager.",
   "license": "MIT",
