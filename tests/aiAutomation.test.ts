@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseRelativeReminder } from '../src/services/aiCapture.js';
 import { scanAiTasks, syncAiScanReminders } from '../src/services/aiAutomation.js';
 import type { ReminderProvider } from '../src/services/reminders.js';
 import { completeTask, createTask, getTask } from '../src/services/tasks.js';
@@ -143,5 +144,20 @@ describe('AI automation', () => {
     } finally {
       close();
     }
+  });
+});
+
+
+describe('Relative reminder parser', () => {
+  it('parses one-minute reminder deterministically', () => {
+    const result = parseRelativeReminder('一分钟后提醒我', new Date('2026-09-28T07:57:00.000Z'));
+    expect(result?.title).toBe('提醒');
+    expect(result?.reminderAt).toBe('2026-09-28T07:58:00.000Z');
+  });
+
+  it('keeps reminder content as one task title', () => {
+    const result = parseRelativeReminder('10分钟后提醒我关程序', new Date('2026-09-28T07:57:00.000Z'));
+    expect(result?.title).toBe('关程序');
+    expect(result?.reminderAt).toBe('2026-09-28T08:07:00.000Z');
   });
 });
