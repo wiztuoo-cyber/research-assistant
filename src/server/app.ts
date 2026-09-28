@@ -116,8 +116,8 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
       res.status(400).json({ error: 'Invalid widget size.' });
       return;
     }
-    const safeWidth = Math.max(420, Math.min(1800, width));
-    const safeHeight = Math.max(300, Math.min(1400, height));
+    const safeWidth = Math.max(320, Math.min(1800, width));
+    const safeHeight = Math.max(220, Math.min(1400, height));
     desktopControls.resizeWidget?.(safeWidth, safeHeight);
     res.json({ ok: true, width: safeWidth, height: safeHeight });
   });
