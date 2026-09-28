@@ -10,7 +10,7 @@ type AiAction =
   | { type: 'delete_task'; task_id: string }
   | { type: 'add_step'; task_id: string; title: string }
   | { type: 'add_point'; task_id: string; content: string }
-  | { type: 'schedule'; title: string; kind?: string; start_at?: string|null; end_at?: string|null; location?: string|null; notes?: string|null }
+  | { type: 'schedule'; title: string; kind?: string; start_at?: string|null; end_at?: string|null; reminder_at?: string|null; location?: string|null; notes?: string|null }
   | { type: 'job'; company: string; role?: string|null; status?: string; next_action?: string|null; deadline_at?: string|null; event_at?: string|null; notes?: string|null }
   | { type: 'knowledge'; kind: 'sop'|'skill'|'note'; title: string; category?: string|null; content?: string|null };
 
@@ -93,7 +93,10 @@ steps只放“需要逐项完成”的子任务；points只放“重要提醒/�
 - “提醒我/到点叫我”才填写 reminder_at。
 修改已有任务时，只修改用户明确要求变化的字段；没有提到的状态、截止时间、提醒时间等必须保持不变。
 如果用户说“提醒我做某事/到点提醒我做某事”，必须创建或更新 task，不要创建 schedule；若没有另外指定计划执行时间，则 start_at 与 reminder_at 使用同一时间。
-schedule用于有明确时间点的面试、笔试、会议、截止、提醒，字段title,kind(deadline/interview/written_test/meeting/exam/reminder/other),start_at,end_at,location,notes。
+schedule只用于“固定发生的事件”，例如面试、笔试、会议、考试，字段title,kind(interview/written_test/meeting/exam/other),start_at,end_at,reminder_at,location,notes。
+不要把任务DDL单独创建为schedule；“论文周五截止”应是task.deadline_at。
+不要把“提醒我做某事”创建为schedule；它应是task.reminder_at，并在未指定计划时间时让task.start_at=reminder_at。
+如果固定事件同时说“提前30分钟提醒/某时提醒”，schedule.reminder_at必须填写对应的完整ISO时间。
 job用于秋招进展，字段company,role,status(wishlist/applied/written_test/interview/offer/rejected/withdrawn/closed),next_action,deadline_at,event_at,notes。
 knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,category,content。
 同一句可生成多个action。优先级按实际重要程度判断，不要把所有事项都设为high。日期无法确定时填null。`
@@ -164,6 +167,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
         kind: action.kind ?? 'other',
         start_at: action.start_at ?? null,
         end_at: action.end_at ?? null,
+        reminder_at: action.reminder_at ?? null,
         location: action.location ?? null,
         notes: action.notes ?? null
       }));
