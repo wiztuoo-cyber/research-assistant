@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage, Notification, screen } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage, Notification, screen, shell } from 'electron';
 import express from 'express';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,6 +22,7 @@ const firedReminders = new Set<string>();
 let reminderTimer: NodeJS.Timeout | null = null;
 let desktopWidgetTimer: NodeJS.Timeout | null = null;
 const activeNotifications = new Set<Notification>();
+const reminderWindows = new Set<BrowserWindow>();
 const pendingReminderKeys = new Set<string>();
 
 function reminderStatePath(): string {
@@ -41,6 +42,86 @@ function saveFiredReminders(): void {
   } catch {}
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch] ?? ch));
+}
+
+function showReminderPopup(key: string, title: string): boolean {
+  const display = screen.getPrimaryDisplay();
+  const work = display.workArea;
+  const width = 390;
+  const height = 150;
+  const offset = Math.min(reminderWindows.size, 3) * (height + 10);
+  const popup = new BrowserWindow({
+    width,
+    height,
+    x: work.x + work.width - width - 18,
+    y: work.y + work.height - height - 18 - offset,
+    frame: false,
+    resizable: false,
+    movable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: true,
+    show: false,
+    hasShadow: true,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  reminderWindows.add(popup);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{margin:0;background:#fff;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+    .card{box-sizing:border-box;height:100vh;padding:18px 20px;border:1px solid #d9e1ec;border-radius:14px;background:#fff}
+    .cap{font-size:12px;color:#6b7280;margin-bottom:8px}
+    .title{font-size:17px;line-height:1.45;color:#1f2937;font-weight:650;word-break:break-word}
+    .hint{font-size:11px;color:#9ca3af;margin-top:12px}
+  </style></head><body><div class="card"><div class="cap">私人助理提醒</div><div class="title">${escapeHtml(title)}</div><div class="hint">点击提醒可打开周计划</div></div></body></html>`;
+
+  try {
+    void popup.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    popup.once('ready-to-show', () => {
+      if (popup.isDestroyed()) return;
+      popup.show();
+      shell.beep();
+      firedReminders.add(key);
+      pendingReminderKeys.delete(key);
+      saveFiredReminders();
+    });
+    popup.webContents.on('before-input-event', (_event, input) => {
+      if (input.type === 'keyDown' && input.key === 'Escape' && !popup.isDestroyed()) popup.close();
+    });
+    popup.webContents.on('did-finish-load', () => {
+      popup.webContents.executeJavaScript(`document.body.addEventListener('click',()=>location.href='about:blank#open')`).catch(()=>{});
+    });
+    popup.webContents.on('will-navigate', (event, url) => {
+      if (url.endsWith('#open')) {
+        event.preventDefault();
+        showPlanner();
+        if (!popup.isDestroyed()) popup.close();
+      }
+    });
+    const closeTimer = setTimeout(() => {
+      if (!popup.isDestroyed()) popup.close();
+    }, 15000);
+    popup.on('closed', () => {
+      clearTimeout(closeTimer);
+      reminderWindows.delete(popup);
+      pendingReminderKeys.delete(key);
+    });
+    return true;
+  } catch {
+    reminderWindows.delete(popup);
+    pendingReminderKeys.delete(key);
+    if (!popup.isDestroyed()) popup.destroy();
+    return false;
+  }
+}
+
 function showReminderNotification(key: string, title: string): boolean {
   if (!Notification.isSupported()) return false;
   if (pendingReminderKeys.has(key)) return true;
@@ -54,13 +135,10 @@ function showReminderNotification(key: string, title: string): boolean {
   activeNotifications.add(notification);
 
   notification.once('show', () => {
-    pendingReminderKeys.delete(key);
-    firedReminders.add(key);
-    saveFiredReminders();
+    activeNotifications.add(notification);
   });
 
   notification.once('failed', () => {
-    pendingReminderKeys.delete(key);
     activeNotifications.delete(notification);
   });
 
@@ -77,7 +155,6 @@ function showReminderNotification(key: string, title: string): boolean {
     notification.show();
     return true;
   } catch {
-    pendingReminderKeys.delete(key);
     activeNotifications.delete(notification);
     return false;
   }
@@ -117,7 +194,10 @@ function checkWindowsReminders(): void {
     if (due < dayStart) continue;
     const key = `${row.source}|${row.id}|${row.reminder_at}`;
     if (firedReminders.has(key) || pendingReminderKeys.has(key)) continue;
-    showReminderNotification(key, row.title);
+    pendingReminderKeys.add(key);
+    const popupShown = showReminderPopup(key, row.title);
+    if (popupShown) showReminderNotification(key, row.title);
+    else pendingReminderKeys.delete(key);
   }
 }
 
