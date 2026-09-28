@@ -197,6 +197,7 @@ function createPlannerWindow(url: string): void {
     fullscreenable: false,
     thickFrame: true,
     title: '私人助理 · 本周计划',
+    type: 'toolbar',
     frame: false,
     transparent: false,
     backgroundColor: '#f4f6fa',
