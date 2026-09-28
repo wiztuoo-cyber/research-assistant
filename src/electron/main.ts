@@ -51,7 +51,6 @@ function showReminderNotification(key: string, title: string): boolean {
     body: title,
     silent: true,
     timeoutType: 'default',
-    id: key.slice(0, 64),
     groupId: 'personal-assistant-reminders'
   });
 
@@ -489,7 +488,6 @@ function createWindow(url: string): void {
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.local.personalassistant');
-  app.setToastActivatorCLSID('{C18D689A-2C76-49ED-B85A-CC95DB13B78E}');
 }
 
 const gotLock = app.requestSingleInstanceLock();
