@@ -308,6 +308,7 @@ function WeekPlanner() {
 
   return (
     <main className='week-planner-shell'>
+      <div className='planner-drag-strip' title='按住这里拖动桌面挂件' />
       <header className='week-planner-header'>
         <form className='planner-capture' onSubmit={(e) => { e.preventDefault(); void addTask(input); }}>
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder='输入一个任务……' />
