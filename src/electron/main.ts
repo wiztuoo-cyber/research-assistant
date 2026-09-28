@@ -124,9 +124,6 @@ function showReminderPopup(key: string, title: string): boolean {
 
 function showReminderNotification(key: string, title: string): boolean {
   if (!Notification.isSupported()) return false;
-  if (pendingReminderKeys.has(key)) return true;
-
-  pendingReminderKeys.add(key);
   const notification = new Notification({
     title: '私人助理提醒',
     body: title
@@ -212,7 +209,7 @@ function trayImage() {
   ).resize({ width: 18, height: 18 });
 }
 
-function embedPlannerIntoWorkerW(attempt = 0): void {
+function attachPlannerToDesktopOwner(attempt = 0): void {
   if (process.platform !== 'win32' || !plannerWindow || plannerWindow.isDestroyed()) return;
 
   const hwndBuffer = plannerWindow.getNativeWindowHandle();
@@ -230,7 +227,7 @@ Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 
-public static class DesktopEmbed {
+public static class DesktopOwner {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
   [DllImport("user32.dll", SetLastError=true)]
@@ -242,72 +239,64 @@ public static class DesktopEmbed {
   [DllImport("user32.dll")]
   public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
 
-  [DllImport("user32.dll", CharSet=CharSet.Auto)]
-  public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+  [DllImport("user32.dll", EntryPoint="GetWindowLongPtrW", SetLastError=true)]
+  public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
 
-  [DllImport("user32.dll", SetLastError=true)]
-  public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
-
-  [DllImport("user32.dll", SetLastError=true)]
-  public static extern long GetWindowLongPtr(IntPtr hWnd, int nIndex);
-
-  [DllImport("user32.dll", SetLastError=true)]
-  public static extern long SetWindowLongPtr(IntPtr hWnd, int nIndex, long dwNewLong);
+  [DllImport("user32.dll", EntryPoint="SetWindowLongPtrW", SetLastError=true)]
+  public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr value);
 
   [DllImport("user32.dll", SetLastError=true)]
   public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
 
-  public const int GWL_STYLE = -16;
+  [DllImport("user32.dll")]
+  public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+  public const int GWLP_HWNDPARENT = -8;
   public const int GWL_EXSTYLE = -20;
-  public const long WS_CHILD = 0x40000000L;
-  public const long WS_POPUP = unchecked((long)0x80000000);
   public const long WS_EX_TOOLWINDOW = 0x00000080L;
   public const long WS_EX_APPWINDOW = 0x00040000L;
-  public const uint SMTO_NORMAL = 0x0000;
   public const uint SWP_NOMOVE = 0x0002;
   public const uint SWP_NOSIZE = 0x0001;
   public const uint SWP_NOACTIVATE = 0x0010;
-  public const uint SWP_FRAMECHANGED = 0x0020;
+  public const uint SWP_SHOWWINDOW = 0x0040;
+  public const int SW_SHOWNOACTIVATE = 4;
 
-  public static IntPtr FindWorkerW() {
+  public static IntPtr ResolveDesktopOwner() {
     IntPtr progman = FindWindow("Progman", null);
-    IntPtr result;
-    SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, SMTO_NORMAL, 1000, out result);
+    IntPtr owner = IntPtr.Zero;
 
-    IntPtr worker = IntPtr.Zero;
     EnumWindows(delegate(IntPtr top, IntPtr lParam) {
       IntPtr shellView = FindWindowEx(top, IntPtr.Zero, "SHELLDLL_DefView", null);
       if (shellView != IntPtr.Zero) {
-        worker = FindWindowEx(IntPtr.Zero, top, "WorkerW", null);
+        owner = top;
+        return false;
       }
       return true;
     }, IntPtr.Zero);
 
-    return worker != IntPtr.Zero ? worker : progman;
+    return owner != IntPtr.Zero ? owner : progman;
   }
 
-  public static bool Embed(IntPtr child) {
-    IntPtr parent = FindWorkerW();
-    if (parent == IntPtr.Zero) return false;
+  public static bool Attach(IntPtr child) {
+    IntPtr owner = ResolveDesktopOwner();
+    if (owner == IntPtr.Zero) return false;
 
-    long style = GetWindowLongPtr(child, GWL_STYLE);
-    style = (style & ~WS_CHILD) | WS_POPUP;
-    SetWindowLongPtr(child, GWL_STYLE, style);
+    SetWindowLongPtr64(child, GWLP_HWNDPARENT, owner);
 
-    long exStyle = GetWindowLongPtr(child, GWL_EXSTYLE);
+    long exStyle = GetWindowLongPtr64(child, GWL_EXSTYLE).ToInt64();
     exStyle = (exStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
-    SetWindowLongPtr(child, GWL_EXSTYLE, exStyle);
+    SetWindowLongPtr64(child, GWL_EXSTYLE, new IntPtr(exStyle));
 
-    SetParent(child, parent);
-    SetWindowPos(child, IntPtr.Zero, 0, 0, 0, 0,
-      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    SetWindowPos(child, new IntPtr(1), 0, 0, 0, 0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    ShowWindow(child, SW_SHOWNOACTIVATE);
     return true;
   }
 }
 "@
 
 $hwnd = [IntPtr]::new([Int64]::Parse($args[0]))
-if (-not [DesktopEmbed]::Embed($hwnd)) { exit 2 }
+if (-not [DesktopOwner]::Attach($hwnd)) { exit 2 }
 `;
 
   const encoded = Buffer.from(ps, 'utf16le').toString('base64');
@@ -317,9 +306,9 @@ if (-not [DesktopEmbed]::Embed($hwnd)) { exit 2 }
     { windowsHide: true },
     (error) => {
       if (!error) return;
-      console.warn('Desktop WorkerW embedding failed:', error.message);
+      console.warn('Desktop owner attach failed:', error.message);
       if (attempt < 4 && plannerWindow && !plannerWindow.isDestroyed() && !quitting) {
-        setTimeout(() => embedPlannerIntoWorkerW(attempt + 1), 700);
+        setTimeout(() => attachPlannerToDesktopOwner(attempt + 1), 700);
       }
     }
   );
@@ -358,7 +347,7 @@ function showPlanner(): void {
     return;
   }
   plannerWindow.showInactive();
-  if (process.platform === 'win32') setTimeout(embedPlannerIntoWorkerW, 80);
+  if (process.platform === 'win32') setTimeout(attachPlannerToDesktopOwner, 80);
 }
 
 function createPlannerWindow(url: string): void {
@@ -407,7 +396,7 @@ function createPlannerWindow(url: string): void {
   void plannerWindow.loadURL(`${url}?view=week`);
   plannerWindow.once('ready-to-show', () => {
     plannerWindow?.showInactive();
-    setTimeout(embedPlannerIntoWorkerW, 120);
+    setTimeout(attachPlannerToDesktopOwner, 120);
   });
   plannerWindow.on('move', saveWidgetBounds);
   plannerWindow.on('resize', saveWidgetBounds);
@@ -517,19 +506,10 @@ function setAutoLaunch(enabled: boolean): void {
 }
 
 function showTestNotification(): void {
-  if (!Notification.isSupported()) {
-    void dialog.showMessageBox({
-      type: 'warning',
-      title: '测试提醒',
-      message: '当前系统不支持 Electron 原生通知。'
-    });
-    return;
-  }
-  const test = new Notification({
-    title: '私人助理提醒',
-    body: '这是一条测试提醒。如果你看到它，Windows 原生提醒通道工作正常。'
-  });
-  test.show();
+  const key = `test|${Date.now()}`;
+  pendingReminderKeys.add(key);
+  showReminderPopup(key, '这是一条测试提醒：能看到弹窗并听到提示音，说明提醒功能正常。');
+  showReminderNotification(key, '测试提醒');
 }
 
 function createTray(): void {
@@ -556,6 +536,7 @@ function createTray(): void {
       }
     }
   ]));
+  tray.on('click', showPlanner);
   tray.on('double-click', showPlanner);
 }
 
@@ -640,6 +621,8 @@ if (!gotLock) {
     plannerWindow?.destroy();
     for (const notification of activeNotifications) notification.close();
     activeNotifications.clear();
+    for (const popup of reminderWindows) if (!popup.isDestroyed()) popup.destroy();
+    reminderWindows.clear();
     db?.close();
   });
 }
