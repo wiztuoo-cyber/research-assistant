@@ -308,7 +308,7 @@ function WeekPlanner() {
       interview: '面试', written_test: '笔试', meeting: '会议', exam: '考试', other: '日程'
     };
     return (
-      <div className='planner-schedule-card' key={'schedule-' + item.id} title={item.location ? '地点：' + item.location : '固定日程'}>
+      <div className='planner-schedule-card' key={'schedule-' + item.id} onDoubleClick={(e) => e.stopPropagation()} title={item.location ? '地点：' + item.location : '固定日程'}>
         <span className='planner-schedule-kind'>{kindMap[item.kind] ?? '日程'}</span>
         <span className='planner-schedule-title'>{time ? time + ' ' : ''}{item.title}</span>
       </div>
