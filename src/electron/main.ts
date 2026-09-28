@@ -1,7 +1,8 @@
-import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, nativeImage, Notification, screen } from 'electron';
 import express from 'express';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { loadLocalEnv } from '../config/env.js';
@@ -20,7 +21,8 @@ let quitting = false;
 const firedReminders = new Set<string>();
 let reminderTimer: NodeJS.Timeout | null = null;
 let desktopWidgetTimer: NodeJS.Timeout | null = null;
-const reminderWindows = new Set<BrowserWindow>();
+const activeNotifications = new Set<Notification>();
+const pendingReminderKeys = new Set<string>();
 
 function reminderStatePath(): string {
   return join(app.getPath('userData'), 'fired-reminders.json');
@@ -39,49 +41,50 @@ function saveFiredReminders(): void {
   } catch {}
 }
 
-function showReminderPopup(title: string): void {
-  const display = screen.getPrimaryDisplay();
-  const work = display.workArea;
-  const width = 360;
-  const height = 118;
-  const offset = Math.min(reminderWindows.size, 4) * (height + 10);
-  const popup = new BrowserWindow({
-    width,
-    height,
-    x: work.x + work.width - width - 18,
-    y: work.y + work.height - height - 18 - offset,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: false,
-    show: false,
-    hasShadow: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
+function showReminderNotification(key: string, title: string): boolean {
+  if (!Notification.isSupported()) return false;
+  if (pendingReminderKeys.has(key)) return true;
+
+  pendingReminderKeys.add(key);
+  const notification = new Notification({
+    title: '私人助理提醒',
+    body: title,
+    silent: true,
+    timeoutType: 'default',
+    id: key.slice(0, 64),
+    groupId: 'personal-assistant-reminders'
   });
 
-  reminderWindows.add(popup);
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-    html,body{margin:0;background:transparent;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
-    .card{margin:8px;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.97);border:1px solid rgba(220,226,235,.95);box-shadow:0 16px 40px rgba(31,41,55,.16)}
-    .cap{font-size:11px;color:#7b8494;margin-bottom:6px}
-    .title{font-size:15px;line-height:1.45;color:#253248;font-weight:650;word-break:break-word}
-  </style></head><body><div class="card"><div class="cap">私人助理提醒</div><div class="title">${title.replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch] ?? ch))}</div></div></body></html>`;
-  void popup.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  popup.once('ready-to-show', () => popup.showInactive());
-  const closeTimer = setTimeout(() => {
-    if (!popup.isDestroyed()) popup.destroy();
-  }, 9000);
-  popup.on('closed', () => {
-    clearTimeout(closeTimer);
-    reminderWindows.delete(popup);
+  activeNotifications.add(notification);
+
+  notification.once('show', () => {
+    pendingReminderKeys.delete(key);
+    firedReminders.add(key);
+    saveFiredReminders();
   });
+
+  notification.once('failed', () => {
+    pendingReminderKeys.delete(key);
+    activeNotifications.delete(notification);
+  });
+
+  notification.once('close', () => {
+    activeNotifications.delete(notification);
+  });
+
+  notification.once('click', () => {
+    activeNotifications.delete(notification);
+    showPlanner();
+  });
+
+  try {
+    notification.show();
+    return true;
+  } catch {
+    pendingReminderKeys.delete(key);
+    activeNotifications.delete(notification);
+    return false;
+  }
 }
 
 function checkWindowsReminders(): void {
@@ -117,10 +120,8 @@ function checkWindowsReminders(): void {
     if (!Number.isFinite(due) || due > nowMs) continue;
     if (due < dayStart) continue;
     const key = `${row.source}|${row.id}|${row.reminder_at}`;
-    if (firedReminders.has(key)) continue;
-    firedReminders.add(key);
-    saveFiredReminders();
-    showReminderPopup(row.title);
+    if (firedReminders.has(key) || pendingReminderKeys.has(key)) continue;
+    showReminderNotification(key, row.title);
   }
 }
 
@@ -133,6 +134,115 @@ function trayImage() {
   return nativeImage.createFromDataURL(
     'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
   ).resize({ width: 18, height: 18 });
+}
+
+function embedPlannerIntoWorkerW(): void {
+  if (process.platform !== 'win32' || !plannerWindow || plannerWindow.isDestroyed()) return;
+
+  const hwndBuffer = plannerWindow.getNativeWindowHandle();
+  let hwnd = 0n;
+  try {
+    hwnd = hwndBuffer.length >= 8
+      ? hwndBuffer.readBigUInt64LE(0)
+      : BigInt(hwndBuffer.readUInt32LE(0));
+  } catch {
+    return;
+  }
+
+  const ps = String.raw`
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class DesktopEmbed {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string className, string windowTitle);
+
+  [DllImport("user32.dll")]
+  public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+  [DllImport("user32.dll", CharSet=CharSet.Auto)]
+  public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern long GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern long SetWindowLongPtr(IntPtr hWnd, int nIndex, long dwNewLong);
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
+
+  public const int GWL_STYLE = -16;
+  public const int GWL_EXSTYLE = -20;
+  public const long WS_CHILD = 0x40000000L;
+  public const long WS_POPUP = unchecked((long)0x80000000);
+  public const long WS_EX_TOOLWINDOW = 0x00000080L;
+  public const long WS_EX_APPWINDOW = 0x00040000L;
+  public const uint SMTO_NORMAL = 0x0000;
+  public const uint SWP_NOMOVE = 0x0002;
+  public const uint SWP_NOSIZE = 0x0001;
+  public const uint SWP_NOACTIVATE = 0x0010;
+  public const uint SWP_FRAMECHANGED = 0x0020;
+
+  public static IntPtr FindWorkerW() {
+    IntPtr progman = FindWindow("Progman", null);
+    IntPtr result;
+    SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, SMTO_NORMAL, 1000, out result);
+
+    IntPtr worker = IntPtr.Zero;
+    EnumWindows(delegate(IntPtr top, IntPtr lParam) {
+      IntPtr shellView = FindWindowEx(top, IntPtr.Zero, "SHELLDLL_DefView", null);
+      if (shellView != IntPtr.Zero) {
+        worker = FindWindowEx(IntPtr.Zero, top, "WorkerW", null);
+      }
+      return true;
+    }, IntPtr.Zero);
+
+    return worker != IntPtr.Zero ? worker : progman;
+  }
+
+  public static bool Embed(IntPtr child) {
+    IntPtr parent = FindWorkerW();
+    if (parent == IntPtr.Zero) return false;
+
+    long style = GetWindowLongPtr(child, GWL_STYLE);
+    style = (style & ~WS_CHILD) | WS_POPUP;
+    SetWindowLongPtr(child, GWL_STYLE, style);
+
+    long exStyle = GetWindowLongPtr(child, GWL_EXSTYLE);
+    exStyle = (exStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
+    SetWindowLongPtr(child, GWL_EXSTYLE, exStyle);
+
+    SetParent(child, parent);
+    SetWindowPos(child, IntPtr.Zero, 0, 0, 0, 0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    return true;
+  }
+}
+"@
+
+$hwnd = [IntPtr]::new([Int64]::Parse($args[0]))
+if (-not [DesktopEmbed]::Embed($hwnd)) { exit 2 }
+`;
+
+  const encoded = Buffer.from(ps, 'utf16le').toString('base64');
+  execFile(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded, hwnd.toString()],
+    { windowsHide: true },
+    (error) => {
+      if (error) console.warn('Desktop WorkerW embedding failed:', error.message);
+    }
+  );
 }
 
 function widgetStatePath(): string {
@@ -214,7 +324,10 @@ function createPlannerWindow(url: string): void {
   });
 
   void plannerWindow.loadURL(`${url}?view=week`);
-  plannerWindow.once('ready-to-show', () => plannerWindow?.showInactive());
+  plannerWindow.once('ready-to-show', () => {
+    plannerWindow?.showInactive();
+    setTimeout(embedPlannerIntoWorkerW, 120);
+  });
   plannerWindow.on('move', saveWidgetBounds);
   plannerWindow.on('resize', saveWidgetBounds);
   plannerWindow.on('minimize', () => {
@@ -374,6 +487,11 @@ function createWindow(url: string): void {
   });
 }
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.local.personalassistant');
+  app.setToastActivatorCLSID('{C18D689A-2C76-49ED-B85A-CC95DB13B78E}');
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -385,7 +503,6 @@ if (!gotLock) {
     process.env.TASK_DB_PATH = join(userData, 'tasks.sqlite');
     process.env.SETTINGS_FILE_PATH = join(userData, 'settings.env');
 
-    app.setAppUserModelId('com.local.personalassistant');
     loadLocalEnv();
     loadFiredReminders();
 
@@ -424,7 +541,8 @@ if (!gotLock) {
     if (desktopWidgetTimer) clearInterval(desktopWidgetTimer);
     server?.close();
     plannerWindow?.destroy();
-    for (const popup of reminderWindows) if (!popup.isDestroyed()) popup.destroy();
+    for (const notification of activeNotifications) notification.close();
+    activeNotifications.clear();
     db?.close();
   });
 }
