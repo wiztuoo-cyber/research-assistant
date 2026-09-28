@@ -29,6 +29,16 @@ function stripFence(s: string): string {
   return s.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
 }
 
+function applyForcedDate(
+  forcedDate: string | null | undefined,
+  candidate: string | null | undefined
+): string | null | undefined {
+  if (!forcedDate) return candidate;
+  const day = forcedDate.slice(0, 10);
+  if (candidate && candidate.length > 10) return day + candidate.slice(10);
+  return day;
+}
+
 export async function aiCapture(db: DatabaseSync, text: string, options: { forcedStartAt?: string | null } = {}): Promise<UnifiedCaptureResult & { provider: string }> {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) {
