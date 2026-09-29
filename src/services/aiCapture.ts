@@ -65,6 +65,125 @@ export function parseRelativeReminder(text: string, now = new Date()): { title: 
   };
 }
 
+
+type NewTaskAction = Extract<AiAction, { type: 'task' }>;
+
+function normalizeComparableTitle(title: string): string {
+  let value = title.trim().toLowerCase();
+  const colon = value.match(/^(.{2,40}?)[：:]\s*(.+)$/);
+  if (colon && /[、，,；;]/.test(colon[2])) value = colon[1];
+  const paren = value.match(/^(.{2,40}?)[（(](.+)[）)]$/);
+  if (paren && /[、，,；;]/.test(paren[2])) value = paren[1];
+
+  return value
+    .replace(/发送给/g, '发给')
+    .replace(/发送/g, '发')
+    .replace(/看看|看一下|查看一下/g, '看')
+    .replace(/想好/g, '想')
+    .replace(/对应的/g, '对应')
+    .replace(/[\s\-—_，。；：、,.!?！？（）()【】\[\]{}“”"'·]/g, '');
+}
+
+function bigramDice(a: string, b: string): number {
+  const left = Array.from(a);
+  const right = Array.from(b);
+  if (a === b) return 1;
+  if (left.length < 2 || right.length < 2) return 0;
+
+  const counts = new Map<string, number>();
+  for (let i = 0; i < left.length - 1; i += 1) {
+    const key = left[i] + left[i + 1];
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let overlap = 0;
+  for (let i = 0; i < right.length - 1; i += 1) {
+    const key = right[i] + right[i + 1];
+    const count = counts.get(key) ?? 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(key, count - 1);
+    }
+  }
+
+  return (2 * overlap) / ((left.length - 1) + (right.length - 1));
+}
+
+export function taskTitlesEquivalent(a: string, b: string): boolean {
+  const left = normalizeComparableTitle(a);
+  const right = normalizeComparableTitle(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+  if (shorter.length >= 5 && longer.includes(shorter) && shorter.length / longer.length >= 0.76) {
+    return true;
+  }
+
+  return bigramDice(left, right) >= 0.84;
+}
+
+function splitWorkflowDetails(action: NewTaskAction): NewTaskAction {
+  let title = action.title.trim();
+  const steps = [...(action.steps ?? [])];
+  const match = title.match(/^(.{2,40}?)[：:]\s*(.+)$/)
+    ?? title.match(/^(.{2,40}?)[（(](.+)[）)]$/);
+
+  if (match && /[、，,；;]/.test(match[2])) {
+    title = match[1].trim();
+    const details = match[2]
+      .split(/[、，,；;]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    for (const detail of details) {
+      if (!steps.includes(detail)) steps.push(detail);
+    }
+  }
+
+  return { ...action, title, steps };
+}
+
+function mergeNewTaskActions(actions: AiAction[]): AiAction[] {
+  const result: AiAction[] = [];
+
+  for (const raw of actions) {
+    if (raw.type !== 'task') {
+      result.push(raw);
+      continue;
+    }
+
+    const action = splitWorkflowDetails(raw);
+    const index = result.findIndex((item) => item.type === 'task' && taskTitlesEquivalent(item.title, action.title));
+    if (index < 0) {
+      result.push(action);
+      continue;
+    }
+
+    const existing = result[index] as NewTaskAction;
+    result[index] = {
+      ...existing,
+      start_at: existing.start_at ?? action.start_at,
+      deadline_at: existing.deadline_at ?? action.deadline_at,
+      reminder_at: existing.reminder_at ?? action.reminder_at,
+      notes: existing.notes ?? action.notes,
+      starred: Boolean(existing.starred || action.starred),
+      steps: Array.from(new Set([...(existing.steps ?? []), ...(action.steps ?? [])])),
+      points: Array.from(new Set([...(existing.points ?? []), ...(action.points ?? [])]))
+    };
+  }
+
+  return result;
+}
+
+function hasDeadlineIntent(text: string): boolean {
+  return /(截止|最晚|ddl|必须在.+前完成|之前完成)/i.test(text);
+}
+
+function hasReminderIntent(text: string): boolean {
+  return /(提醒我|到点叫我|提醒一下|提醒时间)/.test(text);
+}
+
 export async function aiCapture(db: DatabaseSync, text: string, options: { forcedStartAt?: string | null } = {}): Promise<UnifiedCaptureResult & { provider: string }> {
   const relativeReminder = parseRelativeReminder(text);
   if (relativeReminder) {
@@ -156,7 +275,7 @@ schedule只用于“固定发生的事件”，例如面试、笔试、会议、
 如果固定事件同时说“提前30分钟提醒/某时提醒”，schedule.reminder_at必须填写对应的完整ISO时间。
 job用于秋招进展，字段company,role,status(wishlist/applied/written_test/interview/offer/rejected/withdrawn/closed),next_action,deadline_at,event_at,notes。
 knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,category,content。
-同一句可生成多个action。优先级按实际重要程度判断，不要把所有事项都设为high。日期无法确定时填null。`
+同一句可生成多个action，但每个独立事项只能出现一次。后续流程如“先A，完成后B，再C”应生成A、B、C三个不重复的事项；A内部的“想方案、做表、画图、写文字”等应作为A的steps，不要再额外生成多个标题相近的A任务。严禁用括号、冒号或轻微改写重复创建同一任务。优先级按实际重要程度判断，不要把所有事项都设为high。日期无法确定时填null。`
         },
         { role: 'user', content: `${text}\n\n当前已有任务：${JSON.stringify(activeTasks)}` }
       ]
@@ -173,6 +292,29 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
   if (!raw) throw new Error('DeepSeek 没有返回可解析内容。');
   const parsed = JSON.parse(stripFence(String(raw))) as { actions?: AiAction[]; summary?: string };
   let actions = Array.isArray(parsed.actions) ? parsed.actions : [];
+
+  const deadlineIntent = hasDeadlineIntent(text);
+  const reminderIntent = hasReminderIntent(text);
+  actions = actions.map((action) => {
+    if (action.type === 'task') {
+      return {
+        ...action,
+        deadline_at: deadlineIntent ? action.deadline_at : null,
+        reminder_at: reminderIntent ? action.reminder_at : null
+      };
+    }
+    if (action.type === 'update_task') {
+      return {
+        ...action,
+        deadline_at: deadlineIntent ? action.deadline_at : undefined,
+        reminder_at: reminderIntent ? action.reminder_at : undefined
+      };
+    }
+    return action;
+  });
+
+  actions = mergeNewTaskActions(actions);
+
   if (/提醒我|到点叫我/.test(text)) {
     const taskLike = actions.filter((action) => action.type === 'task' || action.type === 'update_task');
     if (taskLike.length > 1) {
@@ -180,6 +322,7 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
       actions = [preferred, ...actions.filter((action) => action.type !== 'task' && action.type !== 'update_task' && action.type !== 'schedule')];
     }
   }
+
   const saved: unknown[] = [];
 
   for (const action of actions) {
@@ -216,6 +359,48 @@ knowledge用于SOP/技能/长期知识，字段kind(sop/skill/note),title,catego
     } else if (action.type === 'add_point') {
       saved.push(addTaskPoint(db, action.task_id, action.content));
     } else if (action.type === 'task') {
+      const matched = activeTasks.find((task) => taskTitlesEquivalent(task.title, action.title));
+      if (matched) {
+        const updated = updateTaskFields(db, matched.id, {
+          status: action.status,
+          priority: action.priority,
+          importance: action.priority === 'high' ? 5 : action.priority === 'low' ? 2 : undefined,
+          urgency: action.status === 'today' ? 5 : action.status ? 3 : undefined,
+          startAt: applyForcedDate(options.forcedStartAt, action.start_at ?? action.reminder_at),
+          deadlineAt: action.deadline_at,
+          reminderAt: action.reminder_at,
+          notes: action.notes
+        }, 'deepseek-dedupe');
+        if (action.starred !== undefined) setTaskStarred(db, matched.id, action.starred);
+
+        const stepRows = db.prepare('select title from task_steps where task_id = ?').all(matched.id) as Array<{title:string}>;
+        const existingSteps = new Set(stepRows.map((row) => normalizeComparableTitle(row.title)));
+        for (const step of action.steps ?? []) {
+          const value = step?.trim();
+          if (!value) continue;
+          const key = normalizeComparableTitle(value);
+          if (!existingSteps.has(key)) {
+            addTaskStep(db, matched.id, value);
+            existingSteps.add(key);
+          }
+        }
+
+        const pointRows = db.prepare('select content from task_points where task_id = ?').all(matched.id) as Array<{content:string}>;
+        const existingPoints = new Set(pointRows.map((row) => normalizeComparableTitle(row.content)));
+        for (const point of action.points ?? []) {
+          const value = point?.trim();
+          if (!value) continue;
+          const key = normalizeComparableTitle(value);
+          if (!existingPoints.has(key)) {
+            addTaskPoint(db, matched.id, value);
+            existingPoints.add(key);
+          }
+        }
+
+        saved.push(updated);
+        continue;
+      }
+
       const task = createTask(db, {
         title: action.title,
         status: action.status ?? 'next',
