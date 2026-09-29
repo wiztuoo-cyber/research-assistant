@@ -5,6 +5,7 @@ import type { Task, TaskInput, TaskStatus } from '../domain/types.js';
 import { getInboxItem, updateInboxStatus } from './inbox.js';
 import { recordTaskEvent, withTransaction } from './events.js';
 import { enrichTaskInputWithNaturalDates } from './naturalDates.js';
+import { taskTitlesEquivalent } from './taskIdentity.js';
 
 type Row = Record<string, unknown>;
 
@@ -214,6 +215,32 @@ export function completeTask(db: DatabaseSync, taskId: string, createdBy = 'api'
     if (!task) throw new Error(`Task not found after completion: ${taskId}`);
     return task;
   });
+}
+
+export function completeTaskAndDuplicates(
+  db: DatabaseSync,
+  taskId: string,
+  createdBy = 'api',
+  at = nowIso()
+): { task: Task; completedIds: string[] } {
+  const target = getTask(db, taskId);
+  if (!target) throw new Error(`Task not found: ${taskId}`);
+
+  const active = listPlanningTasks(db);
+  const duplicates = active.filter((task) =>
+    task.id !== taskId &&
+    taskTitlesEquivalent(target.title, task.title)
+  );
+
+  const task = completeTask(db, taskId, createdBy, at);
+  const completedIds = [taskId];
+
+  for (const duplicate of duplicates) {
+    completeTask(db, duplicate.id, `${createdBy}-duplicate`, at);
+    completedIds.push(duplicate.id);
+  }
+
+  return { task, completedIds };
 }
 
 export function updateTaskFields(
