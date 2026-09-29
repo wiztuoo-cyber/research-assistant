@@ -19,7 +19,14 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listTodayTasks } from '../services/tasks.js';
+import { completeTask, completeTaskAndDuplicates, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask, updateTaskFields } from '../services/tasks.js';
+import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
+import { smartCapture } from '../services/smartCapture.js';
+import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard, updateKnowledgeItem } from '../services/personalOps.js';
+import { unifiedCapture } from '../services/unifiedCapture.js';
+import { aiCapture } from '../services/aiCapture.js';
+import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted, updateTaskPointContent, updateTaskStepTitle } from '../services/taskDetails.js';
+import { getAiSettingsStatus, saveAiSettings } from '../services/settings.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -48,13 +55,71 @@ function asyncHandler(
   };
 }
 
-export function createApp(db: DatabaseSync): express.Express {
+export interface DesktopControls {
+  setWidgetOpacity?: (opacity: number) => void;
+  getWidgetOpacity?: () => number;
+  getWidgetBounds?: () => { width: number; height: number } | null;
+  resizeWidget?: (width: number, height: number) => void;
+}
+
+function pickField(input: Record<string, unknown>, camel: string, snake: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(input, camel)) return input[camel];
+  if (Object.prototype.hasOwnProperty.call(input, snake)) return input[snake];
+  return undefined;
+}
+
+export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {}): express.Express {
   const app = express();
   app.use(express.json());
   app.use('/api', requireAuth);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get('/api/settings/ai', (_req, res) => {
+    res.json(getAiSettingsStatus());
+  });
+
+  app.post('/api/settings/ai', (req, res) => {
+    res.json(saveAiSettings({
+      apiKey: req.body.apiKey,
+      model: req.body.model
+    }));
+  });
+
+  app.get('/api/desktop/widget', (_req, res) => {
+    res.json({
+      supported: Boolean(desktopControls.setWidgetOpacity),
+      opacity: desktopControls.getWidgetOpacity?.() ?? 1
+    });
+  });
+
+  app.post('/api/desktop/widget/opacity', (req, res) => {
+    const opacity = Math.max(0.55, Math.min(1, Number(req.body.opacity ?? 1)));
+    if (!Number.isFinite(opacity)) {
+      res.status(400).json({ error: 'Invalid opacity.' });
+      return;
+    }
+    desktopControls.setWidgetOpacity?.(opacity);
+    res.json({ ok: true, opacity });
+  });
+
+  app.get('/api/desktop/widget/bounds', (_req, res) => {
+    res.json({ bounds: desktopControls.getWidgetBounds?.() ?? null });
+  });
+
+  app.post('/api/desktop/widget/resize', (req, res) => {
+    const width = Math.round(Number(req.body.width));
+    const height = Math.round(Number(req.body.height));
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      res.status(400).json({ error: 'Invalid widget size.' });
+      return;
+    }
+    const safeWidth = Math.max(320, Math.min(1800, width));
+    const safeHeight = Math.max(220, Math.min(1400, height));
+    desktopControls.resizeWidget?.(safeWidth, safeHeight);
+    res.json({ ok: true, width: safeWidth, height: safeHeight });
   });
 
   app.post('/api/inbox', (req, res) => {
@@ -86,8 +151,37 @@ export function createApp(db: DatabaseSync): express.Express {
     res.status(201).json({ task });
   });
 
+  app.patch('/api/tasks/:id', (req, res) => {
+    const input = (req.body.task ?? req.body) as Record<string, unknown>;
+    const task = updateTaskFields(db, req.params.id, {
+      title: input.title as string | undefined,
+      notes: pickField(input, 'notes', 'notes') as string | null | undefined,
+      status: input.status as any,
+      priority: input.priority as any,
+      importance: input.importance as number | undefined,
+      urgency: input.urgency as number | undefined,
+      deadlineAt: pickField(input, 'deadlineAt', 'deadline_at') as string | null | undefined,
+      startAt: pickField(input, 'startAt', 'start_at') as string | null | undefined,
+      reminderAt: pickField(input, 'reminderAt', 'reminder_at') as string | null | undefined,
+      estimatedMinutes: pickField(input, 'estimatedMinutes', 'estimated_minutes') as number | null | undefined
+    }, req.body.createdBy ?? 'web');
+    res.json({ task });
+  });
+
   app.post('/api/tasks/:id/complete', (req, res) => {
-    const task = completeTask(db, req.params.id, req.body.createdBy ?? 'api');
+    const result = req.body.completeDuplicates === false
+      ? { task: completeTask(db, req.params.id, req.body.createdBy ?? 'api'), completedIds: [req.params.id] }
+      : completeTaskAndDuplicates(db, req.params.id, req.body.createdBy ?? 'api');
+    res.json(result);
+  });
+
+  app.post('/api/tasks/:id/trash', (req, res) => {
+    const task = trashTask(db, req.params.id, req.body.createdBy ?? 'web');
+    res.json({ task });
+  });
+
+  app.post('/api/tasks/:id/restore', (req, res) => {
+    const task = restoreTask(db, req.params.id, req.body.status ?? 'next', req.body.createdBy ?? 'web');
     res.json({ task });
   });
 
@@ -96,9 +190,132 @@ export function createApp(db: DatabaseSync): express.Express {
     res.json({ tasks: listTodayTasks(db, now) });
   });
 
+  app.get('/api/tasks/planning', (_req, res) => {
+    res.json({ tasks: listPlanningTasks(db) });
+  });
+
+  app.get('/api/tasks/completed', (req, res) => {
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    res.json({ tasks: listCompletedTasks(db, Number.isFinite(limit) ? limit : 100) });
+  });
+
+  app.get('/api/tasks/trash', (req, res) => {
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    res.json({ tasks: listTrashedTasks(db, Number.isFinite(limit) ? limit : 100) });
+  });
+
+  app.get('/api/tasks/:id/details', (req, res) => {
+    res.json(getTaskDetails(db, req.params.id));
+  });
+
+  app.post('/api/tasks/:id/steps', (req, res) => {
+    res.status(201).json({ step: addTaskStep(db, req.params.id, String(req.body.title ?? '')) });
+  });
+
+  app.patch('/api/tasks/steps/:stepId', (req, res) => {
+    if (typeof req.body.title === 'string') {
+      res.json({ step: updateTaskStepTitle(db, req.params.stepId, req.body.title) });
+      return;
+    }
+    res.json({ step: setTaskStepCompleted(db, req.params.stepId, Boolean(req.body.completed)) });
+  });
+
+  app.delete('/api/tasks/steps/:stepId', (req, res) => {
+    deleteTaskStep(db, req.params.stepId);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/tasks/:id/points', (req, res) => {
+    res.status(201).json({ point: addTaskPoint(db, req.params.id, String(req.body.content ?? '')) });
+  });
+
+  app.patch('/api/tasks/points/:pointId', (req, res) => {
+    res.json({ point: updateTaskPointContent(db, req.params.pointId, String(req.body.content ?? '')) });
+  });
+
+  app.delete('/api/tasks/points/:pointId', (req, res) => {
+    deleteTaskPoint(db, req.params.pointId);
+    res.json({ ok: true });
+  });
+
+  app.patch('/api/tasks/:id/star', (req, res) => {
+    setTaskStarred(db, req.params.id, Boolean(req.body.starred));
+    res.json({ ok: true });
+  });
+
   app.post('/api/recommendations/now', (req, res) => {
     res.json({ recommendations: recommendNow(db, req.body.context ?? {}) });
   });
+
+  app.get('/api/research/dashboard', (_req, res) => {
+    res.json(researchDashboard(db));
+  });
+
+  app.get('/api/research/devices', (_req, res) => {
+    res.json({ devices: listDevices(db) });
+  });
+
+  app.post('/api/research/devices', (req, res) => {
+    const device = createDevice(db, {
+      name: String(req.body.name ?? ''),
+      notes: req.body.notes ?? null,
+      status: req.body.status
+    });
+    res.status(201).json({ device });
+  });
+
+  app.get('/api/research/jobs', (_req, res) => {
+    res.json({ jobs: listComputeJobs(db) });
+  });
+
+  app.post('/api/research/jobs', (req, res) => {
+    const job = createComputeJob(db, req.body.job ?? req.body, req.body.createdBy ?? 'web');
+    res.status(201).json({ job });
+  });
+
+  app.patch('/api/research/jobs/:id', (req, res) => {
+    const job = updateComputeJob(db, req.params.id, req.body.job ?? req.body, req.body.createdBy ?? 'web');
+    res.json({ job });
+  });
+
+  app.post('/api/research/smart-capture', (req, res) => {
+    const result = smartCapture(db, String(req.body.text ?? ''));
+    res.json(result);
+  });
+
+  app.get('/api/personal/dashboard', (_req, res) => {
+    res.json(personalDashboard(db));
+  });
+
+  app.post('/api/personal/schedule', (req, res) => {
+    const item = createScheduleItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
+  });
+
+  app.post('/api/personal/applications', (req, res) => {
+    const application = createJobApplication(db, req.body.application ?? req.body);
+    res.status(201).json({ application });
+  });
+
+  app.post('/api/personal/knowledge', (req, res) => {
+    const item = createKnowledgeItem(db, req.body.item ?? req.body);
+    res.status(201).json({ item });
+  });
+
+  app.patch('/api/personal/knowledge/:id', (req, res) => {
+    const item = updateKnowledgeItem(db, req.params.id, req.body.item ?? req.body);
+    res.json({ item });
+  });
+
+  app.delete('/api/personal/knowledge/:id', (req, res) => {
+    const item = archiveKnowledgeItem(db, req.params.id);
+    res.json({ item });
+  });
+
+  app.post('/api/personal/capture', asyncHandler(async (req, res) => {
+    const result = await aiCapture(db, String(req.body.text ?? ''), { forcedStartAt: req.body.forcedStartAt ?? null });
+    res.json(result);
+  }));
 
   app.post('/api/ai-suggestions', (req, res) => {
     const suggestion = createAiSuggestion(db, req.body);

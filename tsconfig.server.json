@@ -4,9 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist/server",
+    "rootDir": "src",
     "noEmit": false,
     "jsx": "react-jsx"
   },
-  "include": ["src/server", "src/db", "src/services", "src/domain", "src/cli.ts"]
+  "include": ["src/server", "src/electron", "src/db", "src/config", "src/services", "src/domain", "src/cli.ts"]
 }
 

@@ -1,38 +1,41 @@
 {
-  "name": "ai-task-manager",
-  "version": "0.1.0",
+  "name": "research-assistant",
+  "version": "0.2.6",
   "private": false,
-  "description": "Local-first AI-friendly personal task manager with SQLite, CLI, API, and web UI.",
+  "description": "Local-first AI-friendly research task and computation manager.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bonnieFanjing/ai-task-manager.git"
+    "url": "git+https://github.com/wiztuoo-cyber/research-assistant.git"
   },
   "bugs": {
-    "url": "https://github.com/bonnieFanjing/ai-task-manager/issues"
+    "url": "https://github.com/wiztuoo-cyber/research-assistant/issues"
   },
-  "homepage": "https://github.com/bonnieFanjing/ai-task-manager#readme",
+  "homepage": "https://github.com/wiztuoo-cyber/research-assistant#readme",
   "engines": {
     "node": ">=22.5.0"
   },
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "NODE_NO_WARNINGS=1 tsx watch src/server/index.ts",
+    "dev:api": "tsx watch src/server/index.ts",
     "dev:web": "vite --host 0.0.0.0",
-    "build": "tsc -p tsconfig.server.json && vite build",
+    "build": "vite build && tsc -p tsconfig.server.json",
     "lint": "tsc -p tsconfig.check.json --noEmit",
-    "test": "NODE_NO_WARNINGS=1 vitest run",
-    "test:watch": "NODE_NO_WARNINGS=1 vitest",
-    "test:e2e": "NODE_NO_WARNINGS=1 playwright test",
-    "db:migrate": "NODE_NO_WARNINGS=1 tsx src/db/migrate.ts",
-    "db:check": "NODE_NO_WARNINGS=1 tsx src/db/check.ts",
-    "task": "NODE_NO_WARNINGS=1 tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:check": "tsx src/db/check.ts",
+    "task": "tsx src/cli.ts",
     "ai:scan": "scripts/ai-scan-reminders.sh",
     "ai:scan:reminders": "AI_SCAN_SYNC_REMINDERS=1 scripts/ai-scan-reminders.sh",
     "ai:scan:install": "scripts/install-ai-scan-launchd.sh",
     "message:dispatch": "scripts/message-dispatch.sh",
-    "message:dispatch:install": "scripts/install-message-dispatch-launchd.sh"
+    "message:dispatch:install": "scripts/install-message-dispatch-launchd.sh",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
@@ -53,6 +56,37 @@
     "@types/supertest": "^6.0.3",
     "supertest": "^7.1.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.15",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "main": "dist/server/electron/main.js",
+  "build": {
+    "appId": "com.local.personalassistant",
+    "productName": "私人助理",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "私人助理"
+    }
   }
 }

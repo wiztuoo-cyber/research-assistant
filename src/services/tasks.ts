@@ -5,6 +5,7 @@ import type { Task, TaskInput, TaskStatus } from '../domain/types.js';
 import { getInboxItem, updateInboxStatus } from './inbox.js';
 import { recordTaskEvent, withTransaction } from './events.js';
 import { enrichTaskInputWithNaturalDates } from './naturalDates.js';
+import { taskTitlesEquivalent } from './taskIdentity.js';
 
 type Row = Record<string, unknown>;
 
@@ -35,6 +36,7 @@ export function toTask(row: Row): Task {
     updated_at: String(row.updated_at),
     completed_at: nullableString(row.completed_at),
     deleted_at: nullableString(row.deleted_at),
+    starred: Number(row.starred) === 1,
     requires_computer: row.requires_computer === undefined ? undefined : Number(row.requires_computer),
     requires_phone: row.requires_phone === undefined ? undefined : Number(row.requires_phone),
     requires_internet: row.requires_internet === undefined ? undefined : Number(row.requires_internet),
@@ -215,6 +217,32 @@ export function completeTask(db: DatabaseSync, taskId: string, createdBy = 'api'
   });
 }
 
+export function completeTaskAndDuplicates(
+  db: DatabaseSync,
+  taskId: string,
+  createdBy = 'api',
+  at = nowIso()
+): { task: Task; completedIds: string[] } {
+  const target = getTask(db, taskId);
+  if (!target) throw new Error(`Task not found: ${taskId}`);
+
+  const active = listPlanningTasks(db);
+  const duplicates = active.filter((task) =>
+    task.id !== taskId &&
+    taskTitlesEquivalent(target.title, task.title)
+  );
+
+  const task = completeTask(db, taskId, createdBy, at);
+  const completedIds = [taskId];
+
+  for (const duplicate of duplicates) {
+    completeTask(db, duplicate.id, `${createdBy}-duplicate`, at);
+    completedIds.push(duplicate.id);
+  }
+
+  return { task, completedIds };
+}
+
 export function updateTaskFields(
   db: DatabaseSync,
   taskId: string,
@@ -288,16 +316,19 @@ export function listTodayTasks(db: DatabaseSync, now = nowIso()): Task[] {
         where tasks.status not in ('completed', 'canceled', 'trash')
           and (
             tasks.status = 'today'
+            or substr(tasks.start_at, 1, 10) = ?
             or substr(tasks.deadline_at, 1, 10) = ?
           )
         order by
-          case when substr(tasks.deadline_at, 1, 10) = ? then 0 else 1 end,
+          case when substr(tasks.start_at, 1, 10) = ? then 0
+               when substr(tasks.deadline_at, 1, 10) = ? then 1
+               else 2 end,
           tasks.importance desc,
           tasks.urgency desc,
           tasks.created_at asc
       `
     )
-    .all(day, day)
+    .all(day, day, day, day)
     .map((row) => toTask(row as Row));
 }
 
@@ -362,5 +393,131 @@ export function listCompletedAiDelegatedTasksSince(db: DatabaseSync, since: stri
       `
     )
     .all(since)
+    .map((row) => toTask(row as Row));
+}
+
+
+export function listPlanningTasks(db: DatabaseSync): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.deleted_at is null
+          and tasks.status in ('today', 'next', 'scheduled', 'waiting', 'someday')
+        order by
+          case tasks.status
+            when 'today' then 0
+            when 'next' then 1
+            when 'scheduled' then 1
+            when 'waiting' then 2
+            when 'someday' then 3
+            else 4
+          end,
+          case tasks.priority
+            when 'high' then 0
+            when 'medium' then 1
+            else 2
+          end,
+          tasks.importance desc,
+          tasks.urgency desc,
+          coalesce(tasks.deadline_at, '9999-12-31') asc,
+          tasks.created_at asc
+      `
+    )
+    .all()
+    .map((row) => toTask(row as Row));
+}
+
+
+export function listCompletedTasks(db: DatabaseSync, limit = 100): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.deleted_at is null
+          and tasks.status = 'completed'
+        order by tasks.completed_at desc, tasks.updated_at desc
+        limit ?
+      `
+    )
+    .all(limit)
+    .map((row) => toTask(row as Row));
+}
+
+
+export function trashTask(db: DatabaseSync, taskId: string, createdBy = 'api', at = nowIso()): Task {
+  return withTransaction(db, () => {
+    const oldTask = getTask(db, taskId);
+    if (!oldTask) throw new Error(`Task not found: ${taskId}`);
+
+    db.prepare(
+      `
+        update tasks
+        set status = 'trash', deleted_at = ?, updated_at = ?
+        where id = ?
+      `
+    ).run(at, at, taskId);
+
+    recordTaskEvent(db, {
+      taskId,
+      eventType: 'trashed',
+      oldValue: { status: oldTask.status, deleted_at: oldTask.deleted_at },
+      newValue: { status: 'trash', deleted_at: at },
+      createdBy,
+      at
+    });
+
+    const task = getTask(db, taskId);
+    if (!task) throw new Error(`Task not found after trash: ${taskId}`);
+    return task;
+  });
+}
+
+export function restoreTask(db: DatabaseSync, taskId: string, status: TaskStatus = 'next', createdBy = 'api', at = nowIso()): Task {
+  return withTransaction(db, () => {
+    const oldTask = getTask(db, taskId);
+    if (!oldTask) throw new Error(`Task not found: ${taskId}`);
+
+    db.prepare(
+      `
+        update tasks
+        set status = ?, deleted_at = null, completed_at = null, updated_at = ?
+        where id = ?
+      `
+    ).run(status, at, taskId);
+
+    recordTaskEvent(db, {
+      taskId,
+      eventType: 'restored',
+      oldValue: { status: oldTask.status, deleted_at: oldTask.deleted_at },
+      newValue: { status, deleted_at: null },
+      createdBy,
+      at
+    });
+
+    const task = getTask(db, taskId);
+    if (!task) throw new Error(`Task not found after restore: ${taskId}`);
+    return task;
+  });
+}
+
+
+export function listTrashedTasks(db: DatabaseSync, limit = 100): Task[] {
+  return db
+    .prepare(
+      `
+        select tasks.*, task_requirements.*
+        from tasks
+        left join task_requirements on task_requirements.task_id = tasks.id
+        where tasks.status = 'trash'
+        order by tasks.deleted_at desc, tasks.updated_at desc
+        limit ?
+      `
+    )
+    .all(limit)
     .map((row) => toTask(row as Row));
 }
