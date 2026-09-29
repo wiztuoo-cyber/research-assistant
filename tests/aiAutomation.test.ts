@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRelativeReminder } from '../src/services/aiCapture.js';
+import { parseRelativeReminder, taskTitlesEquivalent } from '../src/services/aiCapture.js';
 import { scanAiTasks, syncAiScanReminders } from '../src/services/aiAutomation.js';
 import type { ReminderProvider } from '../src/services/reminders.js';
 import { completeTask, createTask, getTask } from '../src/services/tasks.js';
@@ -159,5 +159,23 @@ describe('Relative reminder parser', () => {
     const result = parseRelativeReminder('10分钟后提醒我关程序', new Date('2026-09-28T07:57:00.000Z'));
     expect(result?.title).toBe('关程序');
     expect(result?.reminderAt).toBe('2026-09-28T08:07:00.000Z');
+  });
+});
+
+
+describe('AI workflow task deduplication', () => {
+  it('treats parenthesized workflow details as the same task', () => {
+    expect(taskTitlesEquivalent(
+      '完成算例部分：想好算例、做表做图、写文字描述',
+      '完成算例部分（想算例、做表做图、写文字描述）'
+    )).toBe(true);
+  });
+
+  it('treats small wording changes as the same Ali follow-up task', () => {
+    expect(taskTitlesEquivalent('把算例部分发给Ali看看', '把算例部分发送给Ali看看')).toBe(true);
+  });
+
+  it('keeps genuinely different workflow stages separate', () => {
+    expect(taskTitlesEquivalent('完成算例部分', '修改对应审稿意见')).toBe(false);
   });
 });
