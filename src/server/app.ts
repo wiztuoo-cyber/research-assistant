@@ -19,7 +19,7 @@ import {
   syncActiveTaskReminders,
   syncTaskReminder
 } from '../services/reminders.js';
-import { completeTask, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask, updateTaskFields } from '../services/tasks.js';
+import { completeTask, completeTaskAndDuplicates, convertInboxToTask, createTask, listCompletedTasks, listPlanningTasks, listTodayTasks, listTrashedTasks, restoreTask, trashTask, updateTaskFields } from '../services/tasks.js';
 import { createComputeJob, createDevice, listComputeJobs, listDevices, researchDashboard, updateComputeJob } from '../services/research.js';
 import { smartCapture } from '../services/smartCapture.js';
 import { archiveKnowledgeItem, createJobApplication, createKnowledgeItem, createScheduleItem, personalDashboard, updateKnowledgeItem } from '../services/personalOps.js';
@@ -169,8 +169,10 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   });
 
   app.post('/api/tasks/:id/complete', (req, res) => {
-    const task = completeTask(db, req.params.id, req.body.createdBy ?? 'api');
-    res.json({ task });
+    const result = req.body.completeDuplicates === false
+      ? { task: completeTask(db, req.params.id, req.body.createdBy ?? 'api'), completedIds: [req.params.id] }
+      : completeTaskAndDuplicates(db, req.params.id, req.body.createdBy ?? 'api');
+    res.json(result);
   });
 
   app.post('/api/tasks/:id/trash', (req, res) => {
