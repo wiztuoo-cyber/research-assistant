@@ -1,7 +1,8 @@
-import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Sparkles, Star, X, Plus, Trash2, RotateCcw, Settings, Save } from 'lucide-react';
+import { Check, CalendarDays, BriefcaseBusiness, BookOpen, RefreshCw, Star, X, Plus, Trash2, RotateCcw, Settings, Save } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { AssistantPanel } from './AssistantPanel';
 
 interface Task {
   id: string;
@@ -97,10 +98,11 @@ function startOfWeekMonday(now = new Date()): Date {
 }
 
 function WeekPlanner() {
+  const [showAssistant, setShowAssistant] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [input, setInput] = useState('');
-  const [aiEnabled, setAiEnabled] = useState(() => localStorage.getItem('week-planner-ai') === '1');
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('week-planner-opacity') ?? '0.94'));
   const [message, setMessage] = useState('');
   const [now, setNow] = useState(new Date());
@@ -129,12 +131,14 @@ function WeekPlanner() {
   }, [opacity]);
 
   async function refreshPlanner() {
-    const [taskResult, personal] = await Promise.all([
+    const [taskResult, personal, assistant] = await Promise.all([
       api<{ tasks: Task[] }>('/api/tasks/planning'),
-      api<{ schedule: ScheduleItem[] }>('/api/personal/dashboard')
+      api<{ schedule: ScheduleItem[] }>('/api/personal/dashboard'),
+      api<{ preferences: { aiEnabled: boolean } }>('/api/assistant/state')
     ]);
     setTasks(taskResult.tasks);
     setScheduleItems(personal.schedule ?? []);
+    setAiEnabled(assistant.preferences.aiEnabled);
   }
 
   async function openPlannerTask(taskId: string) {
@@ -314,11 +318,13 @@ function WeekPlanner() {
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder='输入一个任务……' />
           <button type='submit'>添加</button>
         </form>
-        <label className='ai-toggle widget-control'><span>AI</span><input type='checkbox' checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} /><span className='toggle-track'><span /></span><small>{aiEnabled ? '开' : '关'}</small></label>
+        <label className='ai-toggle widget-control'><span>AI</span><input type='checkbox' checked={aiEnabled} onChange={(e) => { const enabled=e.target.checked; void api('/api/assistant/preferences', {method:'PATCH',body:JSON.stringify({aiEnabled:enabled})}).then(()=>setAiEnabled(enabled)).catch(error=>setMessage(String(error))); }} /><span className='toggle-track'><span /></span><small>{aiEnabled ? '开' : '关'}</small></label>
+        <button type='button' onClick={()=>setShowAssistant(true)}>问助理 / 想法</button>
         <label className='opacity-control widget-control' title='调整桌面挂件透明度'><span>透明度</span><input type='range' min='0.58' max='1' step='0.02' value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} /></label>
         <span className='planner-clock'>{clock}</span>
       </header>
       {message ? <div className='planner-message'>{message}</div> : null}
+      {showAssistant ? <div className='assistant-overlay'><button className='assistant-close' onClick={()=>{setShowAssistant(false);void refreshPlanner();}}>返回周计划</button><AssistantPanel/></div> : null}
       <section className='planner-board' ref={plannerBoardRef} style={{ '--planner-left': splitPercent + '%' } as React.CSSProperties}>
         <aside className='planner-all' onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, null)}>
           <div className='planner-section-title'><div><strong>所有任务</strong><small>拖到右侧只安排执行日期</small></div><span>{allTasks.length}</span></div>
@@ -384,8 +390,6 @@ function App() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [aiModel, setAiModel] = useState('deepseek-flash');
   const [aiConfigured, setAiConfigured] = useState(false);
-  const [smartInput, setSmartInput] = useState('');
-  const [smartResult, setSmartResult] = useState('');
   const [message, setMessage] = useState('');
   const [selectedTask, setSelectedTask] = useState<TaskDetailsResponse | null>(null);
   const [newStep, setNewStep] = useState('');
@@ -425,23 +429,6 @@ function App() {
     setSelectedKnowledge(item);
     setKnowledgeTitle(item.title);
     setKnowledgeContent(item.content ?? '');
-  }
-
-  async function submitSmartCapture(event: React.FormEvent) {
-    event.preventDefault();
-    if (!smartInput.trim()) return;
-    try {
-      const response = await api<{ summary: string; provider?: string }>('/api/personal/capture', {
-        method: 'POST',
-        body: JSON.stringify({ text: smartInput })
-      });
-      setSmartResult(`${response.summary}${response.provider ? ` · ${response.provider === 'deepseek' ? 'DeepSeek AI' : '本地解析'}` : ''}`);
-      setSmartInput('');
-      setMessage('已写入本地数据库');
-      await refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
   }
 
   async function trashTask(taskId: string) {
@@ -607,16 +594,7 @@ function App() {
 
       {message ? <div className="status-line">{message}</div> : null}
 
-      <section className="smart-capture-panel">
-        <div className="panel-heading"><Sparkles size={19} /><h2>直接告诉助理发生了什么</h2></div>
-        <form className="smart-capture-form" onSubmit={(event) => void submitSmartCapture(event)}>
-          <textarea value={smartInput} onChange={(event) => setSmartInput(event.target.value)}
-            placeholder="例如：明天把论文回复改完，很重要；里面要补MMA对比、修改C_pred图；注意不要说设计空间降维"
-            rows={3} />
-          <button type="submit"><Sparkles size={17} />智能记录</button>
-        </form>
-        {smartResult ? <div className="smart-result">{smartResult}</div> : null}
-      </section>
+      <AssistantPanel />
 
       <section className="planning-grid">
         <div className="panel task-bucket">
@@ -749,6 +727,7 @@ function App() {
               </label>
               <div className="drawer-footer-actions">
                 <button type="button" onClick={() => void saveKnowledge()}><Save size={16}/>保存</button>
+                <button type="button" onClick={() => { void api('/api/assistant/import-knowledge/'+selectedKnowledge.id,{method:'POST'}).then(()=>{setSelectedKnowledge(null);setMessage('已将保存过的知识内容复制到同名主题，原知识记录保留。');}).catch(error=>setMessage(String(error))); }}>复制已保存内容到主题笔记</button>
                 <button className="danger-button" type="button" onClick={() => void deleteKnowledge()}><Trash2 size={16}/>删除</button>
               </div>
             </section>

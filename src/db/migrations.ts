@@ -307,6 +307,37 @@ export const migrations: Migration[] = [
       create index if not exists idx_schedule_items_reminder
         on schedule_items(reminder_at);
     `
+  },
+  {
+    id: '0007_topic_assistant',
+    sql: `
+      create table assistant_preferences (
+        id integer primary key check(id=1), ai_enabled integer not null default 0,
+        auto_organize integer not null default 0
+      );
+      insert into assistant_preferences(id) values(1);
+      create table thought_topics (
+        id text primary key, title text not null unique, revision integer not null default 0,
+        summary text not null default '', points_json text not null default '[]',
+        paused integer not null default 0, dirty_at text, retry_at text,
+        last_error text, organized_at text, created_at text not null
+      );
+      create table thought_captures (
+        id text primary key, raw_text text not null, topic_id text references thought_topics(id),
+        assignment_locked integer not null default 0, classification_attempted integer not null default 0,
+        request_id text unique, created_at text not null
+      );
+      create index idx_thought_captures_topic on thought_captures(topic_id,created_at);
+      create table thought_versions (
+        id text primary key, topic_id text not null references thought_topics(id),
+        revision integer not null, summary text not null, points_json text not null,
+        author text not null, created_at text not null, unique(topic_id,revision)
+      );
+      create table assistant_messages (
+        id integer primary key autoincrement, role text not null, content text not null,
+        created_at text not null
+      );
+    `
   }
 ];
 

@@ -1,5 +1,12 @@
 # Task Breakdown
 
+## 2026-10-08: Personal assistant expansion
+
+- TASK-0701: Topic captures, immutable originals, versioned summaries, corrections and restore. Acceptance: TC-TOPIC-001..005.
+- TASK-0702: Opt-in background organization with batching, restart recovery, bounded context and retries. Acceptance: TC-TOPIC-006..009.
+- TASK-0703: Read-only contextual assistant, task/schedule capture entry, topic UI. Acceptance: TC-CHAT-001..003, TC-TOPIC-010.
+- Status: Implemented; local automated checks passed, live model quality remains a manual acceptance item. The user explicitly authorized automatic topic organization; generated summaries remain labeled AI output and never change tasks or schedules.
+
 ## Principle
 
 Each task should produce a working, testable slice.

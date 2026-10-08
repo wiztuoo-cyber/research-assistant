@@ -1,6 +1,26 @@
 # Project Status
 
-Last updated: 2026-05-24
+Last updated: 2026-10-08
+
+## Current Windows extension: v0.2.7
+
+TASK-0701, TASK-0702 and TASK-0703 implemented. Earlier Mac-first notes below are historical.
+
+- New assistant panel in the main screen and week widget: read-only conversation, explicit thought capture and task/schedule capture.
+- Topic originals, conservative automatic grouping, source-linked summaries, revisions, manual corrections, restore, and moving sources. Existing knowledge can be copied explicitly into a topic.
+- Persistent AI/auto-organization controls shared with widget; two-minute idle batching; 30-second pending-work checks recover after restart. No model calls when AI is off or content is unchanged. Failed organization retains the prior version and backs off for 30 minutes. Uncertain/failed classification stays in the visible unassigned list with manual retry.
+- User edits and restores pause automatic replacement. Manual edits are retained as source evidence when organization resumes. Revision checks discard stale AI results.
+- Chat uses current task dates, steps, points, schedules, selected topic originals and bounded recent history. It offers advice without modifying plans.
+- New migration 0007; service/API tests in topics.test.ts and assistantChat.test.ts; Playwright coverage in assistant.spec.ts. Acceptance IDs: TC-TOPIC-001..010, TC-CHAT-001..003.
+- Local verification: TypeScript passed; 60 tests passed; 3 Playwright E2E tests passed using installed Edge; production build and db:check passed. Fixed pre-existing Windows CLI test launching and synchronized the previously incomplete dependency lockfile.
+- User requested GitHub-hosted builds/downloads instead of further local packaging. Local packaging stopped. Windows workflow now also runs on pull requests targeting feature/research-dashboard; remote build results tracked with the PR.
+
+Known limits / manual acceptance:
+
+- Real DeepSeek semantic quality is not certified by mock-provider tests. Try uncertainty, competing alternatives and corrections with representative notes.
+- Only changed topics are sent, but each changed topic is rebuilt from original sources (not recursively summarized). A 60,000-character serialized source cap fails visibly and asks to split the topic; no silent truncation. This trades some tokens for source fidelity.
+- Chat context includes at most 100 deadline-first tasks, 40 relevant schedules and 10 recent messages; omissions are disclosed to the model. Plans still require explicit user action through capture/edit flows.
+- Automatic work requires the app running. Closing/reopening recovers pending work. Existing production user data and API keys were not used in testing.
 
 ## Current phase
 

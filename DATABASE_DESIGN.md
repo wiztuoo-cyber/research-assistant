@@ -1,5 +1,9 @@
 # Database Design
 
+## Topic extension (migration 0007)
+
+`thought_topics`: unique title, monotonically increasing revision, current summary/version, pause flag, dirty/debounce timestamp and retry status. `thought_captures`: immutable raw text, timestamp, optional topic assignment and idempotency key. `thought_versions`: append-only summary snapshots with structured source references. `assistant_preferences`: persisted AI and automatic organization flags. `assistant_messages`: bounded-context conversation history (stored locally). All writes go through services; compare-and-swap revision guards protect concurrent edits. Existing knowledge tables are preserved.
+
 ## Goals
 
 The database should be simple, inspectable, and resilient to change.

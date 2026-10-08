@@ -1,4 +1,6 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
+import { assistantRoutes } from './assistantRoutes.js';
+import { assistantPreferences } from '../services/topics.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { createAiSuggestion, acceptAiSuggestionForTask } from '../services/aiSuggestions.js';
 import { scanAiTasks, syncAiScanReminders } from '../services/aiAutomation.js';
@@ -72,6 +74,7 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   const app = express();
   app.use(express.json());
   app.use('/api', requireAuth);
+  app.use('/api/assistant', assistantRoutes(db));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
@@ -313,6 +316,11 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   });
 
   app.post('/api/personal/capture', asyncHandler(async (req, res) => {
+    if (!assistantPreferences(db).aiEnabled) {
+      const task = createTask(db, {title: String(req.body.text ?? ''), startAt: req.body.forcedStartAt ?? null}, 'web');
+      res.json({summary:'已按原文保存任务（AI 关闭）',provider:'local',record:task});
+      return;
+    }
     const result = await aiCapture(db, String(req.body.text ?? ''), { forcedStartAt: req.body.forcedStartAt ?? null });
     res.json(result);
   }));

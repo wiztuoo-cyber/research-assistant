@@ -1,5 +1,13 @@
 # AI Task Manager Requirements
 
+## Accepted extension (2026-10-08; supersedes earlier manual-only AI scope)
+
+Windows local assistant: preserve each thought verbatim; group thoughts into topics; show a versioned, source-linked organized view by default. Batch changed topics after two idle minutes and recover pending work on startup. Automatic organization is a persisted opt-in; AI off performs no model calls. API key continues to use existing settings. Cloud processing disclosure appears beside the control.
+
+Keep uncertainties and conflicting alternatives. Corrections are new source records. Manual summary editing/restoring pauses automatic replacement until the user resumes it. No silent truncation of source material. Invalid or stale model results must never replace a good summary. Provide retry and visible errors.
+
+An assistant panel supports conversation, recording thoughts, and explicit task/schedule capture. Conversation reads current tasks, fixed schedules, selected topic sources and a bounded recent conversation. It offers reasons and assumptions without changing plans. Capturing ideas must never create tasks. Existing knowledge records remain accessible and can be explicitly copied into topics.
+
 ## 目标
 
 做一个个人使用的、本地优先的 AI 任务管理工具，用来替代或部分替代 Doit.im。

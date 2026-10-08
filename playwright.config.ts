@@ -7,19 +7,21 @@ export default defineConfig({
     timeout: 5000
   },
   use: {
+    channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry'
   },
   webServer: [
     {
       command: 'npm run dev:api',
+      env: { TASK_DB_PATH: `.test-data/e2e-${process.pid}.sqlite`, DEEPSEEK_API_KEY: '', API_TOKEN: '' },
       url: 'http://127.0.0.1:4010/api/health',
-      reuseExistingServer: !process.env.CI
+      reuseExistingServer: false
     },
     {
       command: 'npm run dev:web',
       url: 'http://127.0.0.1:5173',
-      reuseExistingServer: !process.env.CI
+      reuseExistingServer: false
     }
   ],
   projects: [

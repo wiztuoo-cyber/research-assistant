@@ -11,7 +11,8 @@ const requiredTables = [
   'task_requirements',
   'task_events',
   'ai_suggestions',
-  'reminder_syncs'
+  'reminder_syncs',
+  'thought_topics', 'thought_captures', 'thought_versions', 'assistant_preferences', 'assistant_messages'
 ];
 
 const existing = new Set(

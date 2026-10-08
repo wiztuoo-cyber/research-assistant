@@ -10,6 +10,9 @@ import { getDatabasePath, openDatabase } from '../db/connection.js';
 import { runMigrations } from '../db/migrations.js';
 import { backupDatabase } from '../services/backup.js';
 import { createApp } from '../server/app.js';
+import { startTopicWorker } from '../services/topics.js';
+
+let stopTopics: (()=>void) | undefined;
 
 let mainWindow: BrowserWindow | null = null;
 let plannerWindow: BrowserWindow | null = null;
@@ -594,6 +597,7 @@ if (!gotLock) {
     }
 
     const port = await startLocalServer();
+    stopTopics = startTopicWorker(db);
     localBaseUrl = `http://127.0.0.1:${port}`;
     createWindow(localBaseUrl);
     mainWindow?.hide();
@@ -614,6 +618,7 @@ if (!gotLock) {
   });
 
   app.on('will-quit', () => {
+    stopTopics?.();
     globalShortcut.unregisterAll();
     if (reminderTimer) clearInterval(reminderTimer);
     if (desktopWidgetTimer) clearInterval(desktopWidgetTimer);

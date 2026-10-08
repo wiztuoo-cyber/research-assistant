@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 function runCli(dbPath: string, args: string[]): string {
-  return execFileSync('npx', ['tsx', 'src/cli.ts', ...args], {
+  return execFileSync(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...args], {
     cwd: process.cwd(),
     env: {
       ...process.env,

@@ -1,5 +1,21 @@
 # Test Cases
 
+## Topic and assistant acceptance (2026-10-08)
+
+- TC-TOPIC-001: Migration preserves existing tasks/knowledge; captures preserve exact raw text; repeated request ID is idempotent.
+- TC-TOPIC-002: Summary references only real sources and covers every source; malformed/omitting responses preserve old version.
+- TC-TOPIC-003: User edit or new capture during generation prevents stale writes.
+- TC-TOPIC-004: Version restore creates a new revision and pauses automatic replacement; corrections remain raw sources.
+- TC-TOPIC-005: Moving a capture invalidates both topic summaries; explicit assignment is never reclassified.
+- TC-TOPIC-006: Disabled AI/no API key makes zero background model calls; new work survives restart.
+- TC-TOPIC-007: Two-minute debounce, unchanged topics skipped, failed calls backed off; manual retry supported.
+- TC-TOPIC-008: Conservative classification can leave uncertain thoughts unassigned; no task mutation.
+- TC-TOPIC-009: Bounded source payload rejects oversized topics explicitly; never silently truncates.
+- TC-TOPIC-010: UI capture, source inspection, manual edit, pause/resume and history are usable (Playwright).
+- TC-CHAT-001: Conversation reads real tasks and fixed schedules, includes local time and explicit unknowns, and does not mutate plans.
+- TC-CHAT-002: Follow-ups use bounded persisted history; source IDs are validated; API failures are shown without fabricated answers.
+- TC-CHAT-003: AI-off chat uses local recommendations; AI-off task capture preserves literal title; idea capture never creates tasks.
+
 ## Status legend
 
 - Planned: documented, not implemented.
