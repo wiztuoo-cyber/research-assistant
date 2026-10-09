@@ -226,3 +226,9 @@ Known issues:
 ### v0.2.10 final cloud verification
 
 Commit 1d1059564c7ce8f16c6c976fc49ca803a6c44c37: CI run 37884163461 passed (including Chromium E2E); Windows build 37884163456 passed. Artifact personal-assistant-windows, ID 11596005427, matches this commit. Installer was not installed locally; user downloads and updates. This verification note is local session bookkeeping after the packaged commit.
+
+### v0.2.11 final cloud verification
+Final commit fb26d18d4743bd49848c9dfec88f8c22b8fd8285: CI run 37900611752 and Windows build 37900611834 succeeded. Supersedes preliminary e7ad421f9d67340d4ef6d5bac538f90b84a347a7 build; download final run only. No local installer installation performed. This is local bookkeeping after the packaged commit.
+
+### v0.2.12 category directory
+TASK-0916 / TC-0916 complete locally: persistent category registry (migration 0011), empty category creation and transactional rename, fixed directory with counts and section navigation, card drop targets and existing undo. Main library continues showing every category. New categories are included in AI classification context. Raw sources remain unchanged; rename preserves manual category locks. Validation: 82 tests, 12 Edge E2E, lint, db:check and production build passed; directory screenshot inspected. Cloud CI and Windows installer pending for this commit.

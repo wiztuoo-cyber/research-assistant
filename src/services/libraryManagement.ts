@@ -1,3 +1,4 @@
+import {rememberKnowledgeCategories,createKnowledgeCategory} from './knowledgeCategories.js';
 import {knowledgeCards} from '../domain/knowledgeCards.js';
 import {textValue} from './assistantModel.js';
 import {updateKnowledgeItem} from './personalOps.js';
@@ -33,7 +34,8 @@ export function undoMerge(db:DatabaseSync,item:Record<string,unknown>){
 }
 
 export function moveKnowledgeCard(db:DatabaseSync,input:{kind:string;id:string;index?:number;revision?:number;category:string}){
- const category=textValue(input.category,100).trim();
+ rememberKnowledgeCategories(db);
+ const category=createKnowledgeCategory(db,textValue(input.category,100)).name;
  if(input.kind==='legacy')return updateKnowledgeItem(db,textValue(input.id,100),{category});
  if(input.kind!=='topic')throw new Error('卡片类型无效');
  const topic=getTopic(db,input.id);if(topic.revision!==input.revision)throw new Error('笔记已更新，请刷新后再拖动');

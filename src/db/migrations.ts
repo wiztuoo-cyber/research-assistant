@@ -380,6 +380,13 @@ export const migrations: Migration[] = [
       revision integer not null default 0,status text not null default 'draft',created_at text not null,updated_at text not null);
     create table review_exports (review_id text not null references reviews(id),kind text not null,item_id text not null,primary key(review_id,kind));
   `}
+,
+ {id:'0011_knowledge_categories',sql:`
+   create table knowledge_categories (name text primary key,created_at text not null);
+   insert or ignore into knowledge_categories select distinct coalesce(nullif(category,''),title),datetime('now') from thought_topics where archived=0;
+   insert or ignore into knowledge_categories select distinct coalesce(nullif(category,''),'其他'),datetime('now') from knowledge_items where status='active';
+   insert or ignore into knowledge_categories select distinct json_extract(p.value,'$.category'),datetime('now') from thought_topics t,json_each(t.points_json) p where t.archived=0 and json_extract(p.value,'$.category') is not null and trim(json_extract(p.value,'$.category'))<>'';
+ `}
 
 ];
 

@@ -599,3 +599,6 @@ Service/unit: old structured points converted to independent cards without data 
 
 ## TC-0913..0915 verification plan
 Service tests: card move and undo retain body/sources, reject stale revisions; review task/week snapshots, local factual fallback, mocked AI followups and valid JSON, revision protection, persistence and idempotent exports, no task/knowledge creation without action. E2E: seven rows including empty dates and navigation, drag task preserves deadline; drag old/new card across category and undo; start review from assistant/task, respond, edit/save/reopen, export explicitly. Regression: lint, test, db:check, build, E2E.
+
+## TC-0916
+Service: empty category persists, normalized duplicate creation is idempotent, rename updates legacy/topic/point memberships and pending hints without altering bodies or sources; conflicting rename rejects atomically. E2E: create via bottom of sidebar, reload empty category, drag card onto directory and undo, rename, click jump/scroll highlight, sidebar remains visible with long content. Run standard regression.

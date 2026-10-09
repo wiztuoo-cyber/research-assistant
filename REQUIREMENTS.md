@@ -315,3 +315,6 @@ Independent knowledge cards under category headings replace maps and combined pr
 
 ## v0.2.11 / TASK-0913..0915
 Approved: seven rows instead of seven columns in week widget; retain all-task left pane. Drag knowledge cards into existing categories, preserve manual classification and old content, no new-category/record-thought/new-note toolbar. Reviews use existing assistant, event or current-week scope, auto-collected facts and user-supplied outcomes, editable saved cards, optional explicit save-as-knowledge and add-task; history separate from knowledge.
+
+## v0.2.12 / TASK-0916
+Knowledge library has a persistent left category directory with counts and bottom Add Category entry. Empty categories survive reload, menu supports rename, click scrolls right content without hiding other categories, scroll updates highlighted category, cards may be dropped onto sidebar names. Existing user content and original sources remain intact.
