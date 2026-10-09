@@ -318,3 +318,5 @@ Approved: seven rows instead of seven columns in week widget; retain all-task le
 
 ## v0.2.12 / TASK-0916
 Knowledge library has a persistent left category directory with counts and bottom Add Category entry. Empty categories survive reload, menu supports rename, click scrolls right content without hiding other categories, scroll updates highlighted category, cards may be dropped onto sidebar names. Existing user content and original sources remain intact.
+
+## v0.2.13 / TASK-0917: category menu supports Delete Category. Empty category removes directly; populated category asks for existing target, then moves all contents and removes source category. No content deletion or AI deletion command.

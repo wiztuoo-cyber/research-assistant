@@ -40,3 +40,29 @@ export function renameKnowledgeCategory(db:DatabaseSync,from:string,value:unknow
   db.exec('COMMIT');return {name};
  }catch(e){db.exec('ROLLBACK');throw e;}
 }
+
+export function deleteKnowledgeCategory(db:DatabaseSync,from:unknown,to?:unknown){
+ const name=textValue(from,100).trim();
+ db.exec('BEGIN IMMEDIATE');try{
+  const categories=listKnowledgeCategories(db),source=categories.find(c=>c.name===name);
+  if(!source)throw new Error('大类已变更，请刷新');
+  const target=to===undefined?null:textValue(to,100).trim();
+  if(target===name)throw new Error('请选择另一个大类');
+  if(target&&!categories.some(c=>c.name===target))throw new Error('目标大类已变更，请重新选择');
+  if(source.count&&!target)throw new Error('大类中有知识，请先选择移动到哪个大类');
+  rememberKnowledgeCategories(db);
+  for(const t of db.prepare('select * from thought_topics where archived=0').all()){
+   const points=knowledgeCards(t as any);let changed=false;
+   for(const p of points)if((p.category||t.category||t.title)===name){
+    p.category=target!;p.categoryLocked=true;
+    if(!p.sourceIds.length)p.sourceIds=db.prepare('select id from thought_captures where topic_id=?').all(t.id).map(r=>String(r.id));
+    changed=true;
+   }
+   if(changed||t.category===name)db.prepare('update thought_topics set category=?,points_json=?,revision=revision+1 where id=?').run(t.category===name?target:t.category,JSON.stringify(points),t.id);
+  }
+  db.prepare("update knowledge_items set category=?,updated_at=? where coalesce(nullif(category,''),'其他')=? and status='active'").run(target,new Date().toISOString(),name);
+  db.prepare('update thought_captures set category_hint=? where category_hint=?').run(target,name);
+  db.prepare('delete from knowledge_categories where name=?').run(name);
+  db.exec('COMMIT');return {deleted:name,moved:source.count,target};
+ }catch(e){db.exec('ROLLBACK');throw e;}
+}

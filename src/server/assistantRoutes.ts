@@ -1,4 +1,4 @@
-import {listKnowledgeCategories,createKnowledgeCategory,renameKnowledgeCategory} from '../services/knowledgeCategories.js';
+import {listKnowledgeCategories,createKnowledgeCategory,renameKnowledgeCategory,deleteKnowledgeCategory} from '../services/knowledgeCategories.js';
 import {listReviews,getReview,startReview,respondReview,saveReview,exportReview} from '../services/reviews.js';
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
@@ -30,6 +30,7 @@ export function assistantRoutes(db: DatabaseSync) {
   router.get('/images/:id',wrap((req,res)=>{const row=db.prepare('select mime,data from knowledge_images where id=?').get(String(req.params.id));if(!row){res.sendStatus(404);return;}res.set('content-type',String(row.mime)).set('X-Content-Type-Options','nosniff').send(Buffer.from(String(row.data),'base64'));}));
   router.get('/state',wrap((_req,res)=>res.json({categories:listKnowledgeCategories(db),preferences:assistantPreferences(db),topics:listTopics(db),unassigned:topicThoughts(db,null),messages:conversationHistory(db)})));
   router.post('/categories',wrap((req,res)=>res.json(createKnowledgeCategory(db,req.body.name))));
+  router.delete('/categories',wrap((req,res)=>res.json(deleteKnowledgeCategory(db,req.body.from,req.body.to))));
   router.patch('/categories',wrap((req,res)=>res.json(renameKnowledgeCategory(db,req.body.from,req.body.name))));
   router.patch('/preferences',wrap((req,res)=>res.json(setAssistantPreferences(db,req.body))));
   router.post('/cards/move',wrap((req,res)=>{const kind=req.body.kind==='legacy'?'knowledge':'card';res.json(undoable(db,kind,String(req.body.id),()=>moveKnowledgeCard(db,req.body)));}));

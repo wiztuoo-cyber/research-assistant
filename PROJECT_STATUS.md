@@ -232,3 +232,9 @@ Final commit fb26d18d4743bd49848c9dfec88f8c22b8fd8285: CI run 37900611752 and Wi
 
 ### v0.2.12 category directory
 TASK-0916 / TC-0916 complete locally: persistent category registry (migration 0011), empty category creation and transactional rename, fixed directory with counts and section navigation, card drop targets and existing undo. Main library continues showing every category. New categories are included in AI classification context. Raw sources remain unchanged; rename preserves manual category locks. Validation: 82 tests, 12 Edge E2E, lint, db:check and production build passed; directory screenshot inspected. Cloud CI and Windows installer pending for this commit.
+
+### v0.2.12 final cloud verification
+Commit 1a7a78cacba407bfeb07d51505350f39e67fcda0: CI 37904564597 and Windows build 37904564629 succeeded. Artifact personal-assistant-windows 11604300272 matches this commit. Installer not installed locally; user downloads and updates. Local bookkeeping after packaged commit.
+
+### v0.2.13 / TASK-0917 / TC-0917
+Manual category deletion implemented in category service, DELETE route, and sidebar menu. Empty categories delete directly. Populated categories require an existing destination; transaction transfers legacy and individual topic cards, preserves sibling points, content and sources, and carries manual classification locks. Missing/stale targets and newly populated empty categories reject safely. No AI deletion tool added. Sidebar keeps forms visible while category names scroll. Checks: lint, 83 tests, 13 Edge E2E, db:check and production build passed; deletion screen inspected. Cloud packaging pending.
