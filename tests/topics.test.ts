@@ -111,3 +111,12 @@ describe('background organization',()=>{
     await organizeTopic(db,t.id,async(s,i)=>{setAssistantPreferences(db,{aiEnabled:false});return summarize(s,i);});expect(getTopic(db,t.id).summary).toBe('');
   });
 });
+
+it('TC-0912 independent point editing preserves sibling, original sources and history',async()=>{
+ const {db}=setup();const t=createTopic(db,'秋招');const a=captureThought(db,{text:'按JD改简历',topicId:t.id}),b=captureThought(db,{text:'明确目标岗位',topicId:t.id});
+ await organizeTopic(db,t.id,async()=>({points:[{title:'调整简历',chapter:'简历',kind:'idea',text:'按JD修改',sourceIds:[a.id]},{title:'明确方向',chapter:'求职方向',kind:'idea',text:'明确目标岗位',sourceIds:[b.id]}]}));
+ const before=getTopic(db,t.id),points=JSON.parse(before.points_json);
+ editTopic(db,t.id,{revision:before.revision,pointIndex:0,point:{title:'匹配经历',text:'只保留真实经历',chapter:'简历'}});
+ const after=getTopic(db,t.id),next=JSON.parse(after.points_json);expect(next[1]).toEqual(points[1]);expect(next[0].sourceIds).toContain(a.id);expect(next[0].sourceIds).not.toContain(b.id);expect(after.paused).toBe(1);expect(topicDetail(db,t.id).versions).toHaveLength(2);expect(topicThoughts(db,t.id).find(t=>t.id===a.id)?.raw_text).toBe('按JD改简历');
+ expect(()=>editTopic(db,t.id,{revision:before.revision,pointIndex:0,point:{title:'过期',text:'覆盖'}})).toThrow('更新');
+});

@@ -1,5 +1,9 @@
 # Task Breakdown
 
+## TASK-0910: v0.2.10 usability corrections
+
+Requirements: independent knowledge cards grouped by category (no mind map), atomic AI points with titles and source retention; point editing; restore all-task/calendar split with persisted resizing; remove inline agenda date inputs; inline detail title editing on both surfaces. User explicitly authorized automatic organization. Acceptance: TC-0910..0912 in TEST_CASES.md. No schema change; structured points stay versioned JSON.
+
 ## Approved v0.2.9 implementation
 
 TASK-0901..0905 and TC-0901..0905 are specified in REDESIGN_029.md. Implemented with local automated verification; real-provider and native-window acceptance remain manual.

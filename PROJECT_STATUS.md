@@ -2,6 +2,14 @@
 
 Last updated: 2026-10-09
 
+## v0.2.10 corrections
+
+TASK-0910 / TC-0910..0912: independent knowledge cards grouped by category, map removed. Existing structured points each display separately without rewriting originals. Card title/body/category/subcategory edits create guarded versions, preserve other points and source links, and pause AI rewriting. AI now receives atomic-point instructions and existing card titles for semantic reuse; actual model classification quality remains provider-dependent. Legacy manual prose without structured points remains one readable card until explicitly reorganized. Originals/history and screenshot provenance retained.
+
+Weekly widget restores all unfinished tasks on left (including outside the selected week), FullCalendar on right, persisted adjustable splitter. Dragging an already scheduled task preserves its deadline and left card; temporary drag previews now tolerate incomplete event metadata. Agenda inline date inputs removed. Both detail surfaces support click-title editing with Enter/save, Escape, IME and blank-title validation. No schema change.
+
+Local validation: 77 service/API/unit tests, 8 Edge E2E flows, lint, db:check and production build. Screenshot review of split calendar and independent knowledge cards completed. Final cloud CI and Windows installer verification pending.
+
 ## v0.2.9 unified assistant, knowledge and calendar
 
 TASK-0901..0905 implemented against TC-0901..0905 (REDESIGN_029.md).

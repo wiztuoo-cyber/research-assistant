@@ -5,6 +5,7 @@ import './styles.css';
 import { AssistantPanel } from './AssistantPanel';
 import {PlannerCalendar,ScheduleDetail} from './PlannerCalendar';
 import {UndoNotice,changed} from './interactions';
+import {TaskTitleEditor} from './TaskTitleEditor';
 import {TaskDateEditor} from './TaskDateEditor';
 import {dateCaption,timeBadge,dayDistance,sortTaskAgenda,localDateKey} from '../domain/timePresentation';
 
@@ -307,7 +308,6 @@ function App() {
             <button className="icon-button" type="button" title="完成" onClick={() => void completeTask(task.id)}>
               <Check size={17} />
             </button>
-            <input className="quick-plan-date" aria-label={'安排日期 '+task.title} title="安排哪天做" type="date" value={task.start_at?localDateKey(task.start_at):''} onChange={e=>{const value=e.target.value;let start:string|null=value||null;if(value&&task.start_at&&task.start_at.length>10){const d=new Date(task.start_at),[y,m,day]=value.split('-').map(Number);d.setFullYear(y,m-1,day);start=d.toISOString();}void api('/api/tasks/'+task.id,{method:'PATCH',body:JSON.stringify({task:{startAt:start}})}).then(()=>refresh()).catch(e=>setMessage(String(e)));}}/>
           </li>
         ))}
       </ul>
@@ -432,7 +432,7 @@ function App() {
                   title="标记重要" onClick={() => void toggleStar(selectedTask.task.id, !selectedTask.task.starred)}>
                   <Star size={20} fill={selectedTask.task.starred ? 'currentColor' : 'none'} />
                 </button>
-                <h2>{selectedTask.task.title}</h2>
+                <h2><TaskTitleEditor key={selectedTask.task.id} task={selectedTask.task} onSaved={()=>{void openTask(selectedTask.task.id);void refresh();}}/></h2>
               </div>
               <button className="icon-button" type="button" onClick={() => setSelectedTask(null)}><X size={18}/></button>
             </div>

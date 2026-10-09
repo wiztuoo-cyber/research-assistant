@@ -589,3 +589,10 @@ Expected:
 Automation:
 
 - Migration test after second migration exists.
+
+## TC-0910: all-task/calendar split
+E2E: unplanned and future-week tasks both visible left; drag changes plan only and retains left card; split resize persists; dots/bars retained.
+## TC-0911: editable task title
+E2E: no inline date inputs; click detail title, reject blank, Escape cancel, Enter/save update both surfaces; verify deadline and steps unchanged.
+## TC-0912: independent knowledge cards
+Service/unit: old structured points converted to independent cards without data loss, manual point edit preserves other points/source IDs and versions; AI prompt requests atomic points. E2E: no map, category grouping, open one point without unrelated content, edit card and verify persistence; source and history flows retained.
