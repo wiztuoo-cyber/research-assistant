@@ -250,6 +250,7 @@ export function updateTaskFields(
   createdBy = 'api',
   at = nowIso()
 ): Task {
+  if(fields.title!==undefined){if(typeof fields.title!=='string'||!fields.title.trim())throw new Error('任务名称不能为空');fields={...fields,title:fields.title.trim()};}
   return withTransaction(db, () => {
     const oldTask = getTask(db, taskId);
     if (!oldTask) throw new Error(`Task not found: ${taskId}`);

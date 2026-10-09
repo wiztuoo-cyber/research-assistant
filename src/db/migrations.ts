@@ -307,7 +307,87 @@ export const migrations: Migration[] = [
       create index if not exists idx_schedule_items_reminder
         on schedule_items(reminder_at);
     `
+  },
+  {
+    id: '0007_topic_assistant',
+    sql: `
+      create table assistant_preferences (
+        id integer primary key check(id=1), ai_enabled integer not null default 0,
+        auto_organize integer not null default 0
+      );
+      insert into assistant_preferences(id) values(1);
+      create table thought_topics (
+        id text primary key, title text not null unique, revision integer not null default 0,
+        summary text not null default '', points_json text not null default '[]',
+        paused integer not null default 0, dirty_at text, retry_at text,
+        last_error text, organized_at text, created_at text not null
+      );
+      create table thought_captures (
+        id text primary key, raw_text text not null, topic_id text references thought_topics(id),
+        assignment_locked integer not null default 0, classification_attempted integer not null default 0,
+        request_id text unique, created_at text not null
+      );
+      create index idx_thought_captures_topic on thought_captures(topic_id,created_at);
+      create table thought_versions (
+        id text primary key, topic_id text not null references thought_topics(id),
+        revision integer not null, summary text not null, points_json text not null,
+        author text not null, created_at text not null, unique(topic_id,revision)
+      );
+      create table assistant_messages (
+        id integer primary key autoincrement, role text not null, content text not null,
+        created_at text not null
+      );
+    `
+  },
+  {
+    id: '0008_usability',
+    sql: `
+      alter table thought_topics add column category text;
+      alter table thought_topics add column kind text not null default 'note' check(kind in ('note','skill','sop'));
+      create table ui_undo (
+        id text primary key, kind text not null, target_id text not null,
+        before_json text not null, after_json text not null, expires_at text not null
+      );
+    `
   }
+  ,{
+    id: '0009_knowledge_sources',
+    sql: `
+      alter table thought_captures add column category_hint text;
+      alter table thought_captures add column source_title text;
+      alter table thought_captures add column source_author text;
+      alter table thought_captures add column source_url text;
+      alter table thought_topics add column archived integer not null default 0;
+      alter table assistant_messages add column references_json text not null default '[]';
+      create table knowledge_images (
+        id text primary key, digest text not null unique, mime text not null,
+        data text not null, extracted_text text, created_at text not null
+      );
+      create table thought_images (
+        thought_id text not null references thought_captures(id),
+        image_id text not null references knowledge_images(id),
+        primary key(thought_id,image_id)
+      );
+      create table item_appearance (
+        item_id text primary key, category text not null default '', color text,
+        position real not null default 0
+      );
+    `
+  },
+  {id:'0010_reviews',sql:`
+    create table reviews (id text primary key,request_id text unique,title text not null,scope text not null,task_id text,
+      context_json text not null,messages_json text not null,draft_json text not null,
+      revision integer not null default 0,status text not null default 'draft',created_at text not null,updated_at text not null);
+    create table review_exports (review_id text not null references reviews(id),kind text not null,item_id text not null,primary key(review_id,kind));
+  `}
+,
+ {id:'0011_knowledge_categories',sql:`
+   create table knowledge_categories (name text primary key,created_at text not null);
+   insert or ignore into knowledge_categories select distinct coalesce(nullif(category,''),title),datetime('now') from thought_topics where archived=0;
+   insert or ignore into knowledge_categories select distinct coalesce(nullif(category,''),'其他'),datetime('now') from knowledge_items where status='active';
+   insert or ignore into knowledge_categories select distinct json_extract(p.value,'$.category'),datetime('now') from thought_topics t,json_each(t.points_json) p where t.archived=0 and json_extract(p.value,'$.category') is not null and trim(json_extract(p.value,'$.category'))<>'';
+ `}
+
 ];
 
 export function ensureMigrationTable(db: DatabaseSync): void {

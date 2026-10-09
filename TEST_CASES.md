@@ -1,5 +1,33 @@
 # Test Cases
 
+TC-0901..0905: see REDESIGN_029.md for approved flows and planned automated/manual acceptance.
+
+## Usability redesign acceptance
+
+- TC-UX-001: Tasks/Assistant/Library are separate pages; no standalone application, waiting or hard-schedule panels; existing records remain preserved.
+- TC-UX-002: Three direct mode buttons; Enter submits once, Ctrl+Enter inserts a newline, composition Enter never submits; failure keeps input and success keeps focus.
+- TC-UX-003: All topic documents and legacy knowledge are searchable in Library. Details provide editable title/category/kind, source/history, direct additions and source-move undo. No copied or divergent topic summaries.
+- TC-UX-004: Today tasks first, deadline ordering thereafter, visible unfinished past plans, local-day countdowns. Past planned dates are not deadline overdue. Actual timed deadlines distinguish passed hours from calendar days. Dates editable in task detail.
+- TC-UX-005: Unfinished-list queries list all active tasks, priority queries recommend; stale selected topics do not scope global task questions; unsupported local queries do not fabricate answers.
+- TC-UX-006: Completion affects only clicked task by default; undo completion/trash restores original status, preserves dates, rejects intervening edits; visible UI undo also supports source moves and knowledge archival.
+- TC-UX-007: Widget main-window button and desktop endpoint tested automatically; tray single click, second launch, focus/restore and shortcut registration require Windows manual smoke check.
+
+## Topic and assistant acceptance (2026-10-08)
+
+- TC-TOPIC-001: Migration preserves existing tasks/knowledge; captures preserve exact raw text; repeated request ID is idempotent.
+- TC-TOPIC-002: Summary references only real sources and covers every source; malformed/omitting responses preserve old version.
+- TC-TOPIC-003: User edit or new capture during generation prevents stale writes.
+- TC-TOPIC-004: Version restore creates a new revision and pauses automatic replacement; corrections remain raw sources.
+- TC-TOPIC-005: Moving a capture invalidates both topic summaries; explicit assignment is never reclassified.
+- TC-TOPIC-006: Disabled AI/no API key makes zero background model calls; new work survives restart.
+- TC-TOPIC-007: Two-minute debounce, unchanged topics skipped, failed calls backed off; manual retry supported.
+- TC-TOPIC-008: Conservative classification can leave uncertain thoughts unassigned; no task mutation.
+- TC-TOPIC-009: Bounded source payload rejects oversized topics explicitly; never silently truncates.
+- TC-TOPIC-010: UI capture, source inspection, manual edit, pause/resume and history are usable (Playwright).
+- TC-CHAT-001: Conversation reads real tasks and fixed schedules, includes local time and explicit unknowns, and does not mutate plans.
+- TC-CHAT-002: Follow-ups use bounded persisted history; source IDs are validated; API failures are shown without fabricated answers.
+- TC-CHAT-003: AI-off chat uses local recommendations; AI-off task capture preserves literal title; idea capture never creates tasks.
+
 ## Status legend
 
 - Planned: documented, not implemented.
@@ -561,3 +589,20 @@ Expected:
 Automation:
 
 - Migration test after second migration exists.
+
+## TC-0910: all-task/calendar split
+E2E: unplanned and future-week tasks both visible left; drag changes plan only and retains left card; split resize persists; dots/bars retained.
+## TC-0911: editable task title
+E2E: no inline date inputs; click detail title, reject blank, Escape cancel, Enter/save update both surfaces; verify deadline and steps unchanged.
+## TC-0912: independent knowledge cards
+Service/unit: old structured points converted to independent cards without data loss, manual point edit preserves other points/source IDs and versions; AI prompt requests atomic points. E2E: no map, category grouping, open one point without unrelated content, edit card and verify persistence; source and history flows retained.
+
+## TC-0913..0915 verification plan
+Service tests: card move and undo retain body/sources, reject stale revisions; review task/week snapshots, local factual fallback, mocked AI followups and valid JSON, revision protection, persistence and idempotent exports, no task/knowledge creation without action. E2E: seven rows including empty dates and navigation, drag task preserves deadline; drag old/new card across category and undo; start review from assistant/task, respond, edit/save/reopen, export explicitly. Regression: lint, test, db:check, build, E2E.
+
+## TC-0916
+Service: empty category persists, normalized duplicate creation is idempotent, rename updates legacy/topic/point memberships and pending hints without altering bodies or sources; conflicting rename rejects atomically. E2E: create via bottom of sidebar, reload empty category, drag card onto directory and undo, rename, click jump/scroll highlight, sidebar remains visible with long content. Run standard regression.
+
+## TC-0917: service tests empty deletion persistence, nonempty missing/self/missing-target rejection, mixed legacy/topic transfers with sibling/source preservation and locked categories; stale empty request rejects newly added cards; E2E menu delete empty, cancel populated deletion, choose destination, reload verifies old category absent and contents retained.
+
+## TC-0918: test AI-off chosen category creates visible card preserving sources and idempotency; old hinted pending recovery repeated safely; manual pending assignment validates stale state; explicit classification skips debounce/auto preference, errors surfaced, inferred cards contain raw content; UI captures selected category and manually assigns pending thought.

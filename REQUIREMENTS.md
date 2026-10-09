@@ -1,5 +1,19 @@
 # AI Task Manager Requirements
 
+The approved v0.2.9 scope in REDESIGN_029.md supersedes the three large capture buttons and flat knowledge list below.
+
+## Approved usability revision
+
+Three main pages: Tasks (today first, then deadline; previous unfinished plans visible; fixed appointments inline), Assistant (three mode buttons), Knowledge Library (topic documents and legacy notes in one searchable list). No standalone job-application/hard-schedule/waiting panels, no deletion of their data. Topic title, subject/category and SOP/skill/note kind are editable. Preserve sources and summary versions. Enter submits, Ctrl+Enter newlines, IME composition must not submit. Conversation, thought and task drafts stay distinct. Capture confirms durable save separately from organization. Global task questions do not inherit previously browsed topics. Single-item completion is the default and destructive user actions offer guarded undo. Widget, tray click, second launch and Ctrl+Alt+M open/focus the single main window; Ctrl+Alt+A still opens the planner.
+
+## Accepted extension (2026-10-08; supersedes earlier manual-only AI scope)
+
+Windows local assistant: preserve each thought verbatim; group thoughts into topics; show a versioned, source-linked organized view by default. Batch changed topics after two idle minutes and recover pending work on startup. Automatic organization is a persisted opt-in; AI off performs no model calls. API key continues to use existing settings. Cloud processing disclosure appears beside the control.
+
+Keep uncertainties and conflicting alternatives. Corrections are new source records. Manual summary editing/restoring pauses automatic replacement until the user resumes it. No silent truncation of source material. Invalid or stale model results must never replace a good summary. Provide retry and visible errors.
+
+An assistant panel supports conversation, recording thoughts, and explicit task/schedule capture. Conversation reads current tasks, fixed schedules, selected topic sources and a bounded recent conversation. It offers reasons and assumptions without changing plans. Capturing ideas must never create tasks. Existing knowledge records remain accessible and can be explicitly copied into topics.
+
 ## 目标
 
 做一个个人使用的、本地优先的 AI 任务管理工具，用来替代或部分替代 Doit.im。
@@ -295,3 +309,16 @@ Codex 适合帮助写入和读取本地 SQLite，但它不是长期后台服务�
 - [AI_DEVELOPMENT_WORKFLOW.md](./AI_DEVELOPMENT_WORKFLOW.md)
 - [DEVELOPMENT_PROCESS.md](./DEVELOPMENT_PROCESS.md)
 - [TASK_BREAKDOWN.md](./TASK_BREAKDOWN.md)
+
+## v0.2.10 corrections (TASK-0910)
+Independent knowledge cards under category headings replace maps and combined prose. Distinct points remain separate; duplicates retain all sources. Cards open individually and support editing. Existing raw records/history remain intact. Restore week widget all unfinished tasks on left, weekly calendar on right with persisted adjustable split. Remove task-list date controls. Click detail title to edit, Enter saves, Escape cancels, blank rejected, other fields preserved.
+
+## v0.2.11 / TASK-0913..0915
+Approved: seven rows instead of seven columns in week widget; retain all-task left pane. Drag knowledge cards into existing categories, preserve manual classification and old content, no new-category/record-thought/new-note toolbar. Reviews use existing assistant, event or current-week scope, auto-collected facts and user-supplied outcomes, editable saved cards, optional explicit save-as-knowledge and add-task; history separate from knowledge.
+
+## v0.2.12 / TASK-0916
+Knowledge library has a persistent left category directory with counts and bottom Add Category entry. Empty categories survive reload, menu supports rename, click scrolls right content without hiding other categories, scroll updates highlighted category, cards may be dropped onto sidebar names. Existing user content and original sources remain intact.
+
+## v0.2.13 / TASK-0917: category menu supports Delete Category. Empty category removes directly; populated category asks for existing target, then moves all contents and removes source category. No content deletion or AI deletion command.
+
+## v0.2.14 / TASK-0918: saving to chosen category must immediately create readable movable card, independent of AI. Recover previously saved hinted pending originals without duplicating. Unassigned originals can be categorized manually. AI classification and content organization must describe prerequisites and outcomes, not silently queue.

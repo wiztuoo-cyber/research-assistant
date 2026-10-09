@@ -1,6 +1,6 @@
 {
   "name": "research-assistant",
-  "version": "0.2.6",
+  "version": "0.2.14",
   "private": false,
   "description": "Local-first AI-friendly research task and computation manager.",
   "license": "MIT",
@@ -38,10 +38,18 @@
     "desktop:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.19",
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/react": "^6.1.19",
     "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.2.1",
+    "dompurify": "^3.4.16",
     "express": "^5.2.1",
     "lucide-react": "^1.16.0",
+    "marked": "^18.1.0",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "tsx": "^4.21.0",
@@ -54,11 +62,11 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/supertest": "^6.0.3",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
     "supertest": "^7.1.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.15",
-    "electron": "^38.0.0",
-    "electron-builder": "^26.0.12"
+    "vitest": "^4.0.15"
   },
   "main": "dist/server/electron/main.js",
   "build": {

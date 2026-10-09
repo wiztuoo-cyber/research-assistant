@@ -1,5 +1,29 @@
 # Task Breakdown
 
+## TASK-0910: v0.2.10 usability corrections
+
+Requirements: independent knowledge cards grouped by category (no mind map), atomic AI points with titles and source retention; point editing; restore all-task/calendar split with persisted resizing; remove inline agenda date inputs; inline detail title editing on both surfaces. User explicitly authorized automatic organization. Acceptance: TC-0910..0912 in TEST_CASES.md. No schema change; structured points stay versioned JSON.
+
+## Approved v0.2.9 implementation
+
+TASK-0901..0905 and TC-0901..0905 are specified in REDESIGN_029.md. Implemented with local automated verification; real-provider and native-window acceptance remain manual.
+
+## 2026-10-08: Confirmed usability redesign
+
+Status: Implemented; automated coverage passed. Windows shell interactions and live model quality require manual acceptance.
+
+- TASK-0801: Three pages, explicit capture modes, Enter submission with IME guard, knowledge library and editable topic metadata. TC-UX-001..003.
+- TASK-0802: Local-day countdowns, previous unfinished plans, read-only query intent, single-task completion and guarded undo. TC-UX-004..006.
+- TASK-0803: Main-window entry from widget, tray, second instance and Ctrl+Alt+M with collision notice. TC-UX-007.
+- User approved implementation after reviewing the interaction proposal. One consolidated remote update; GitHub builds the installer.
+
+## 2026-10-08: Personal assistant expansion
+
+- TASK-0701: Topic captures, immutable originals, versioned summaries, corrections and restore. Acceptance: TC-TOPIC-001..005.
+- TASK-0702: Opt-in background organization with batching, restart recovery, bounded context and retries. Acceptance: TC-TOPIC-006..009.
+- TASK-0703: Read-only contextual assistant, task/schedule capture entry, topic UI. Acceptance: TC-CHAT-001..003, TC-TOPIC-010.
+- Status: Implemented; local automated checks passed, live model quality remains a manual acceptance item. The user explicitly authorized automatic topic organization; generated summaries remain labeled AI output and never change tasks or schedules.
+
 ## Principle
 
 Each task should produce a working, testable slice.
@@ -300,3 +324,15 @@ Deliverables:
 
 - Tailscale access note.
 - Manual verification result.
+
+## TASK-0913..0915: v0.2.11 approved workflow
+- TASK-0913 / TC-0913: seven horizontal weekday rows, all days including empty ones, existing left tasks, week navigation, drop-to-plan preserves deadlines and time, dot/bar colors and completion/details retained.
+- TASK-0914 / TC-0914: remove new-note toolbar, group old and new cards together, drag individual card into existing category with undo and concurrent-edit guard; old content remains manual-only. No new-category or record-thought toolbar buttons.
+- TASK-0915 / TC-0915: assistant conversational event/weekly review with task facts, bounded relevant notes, short optional followups, editable saved review, separate history, explicit idempotent knowledge/task export, reuse saved reviews in future answers. Local fallback must not invent causes. Migration for reviews, no destructive changes.
+
+## TASK-0916 / TC-0916: category directory and creation
+Create persistent empty categories from bottom of sticky sidebar, rename with transactional reassignment preserving content/sources; reject blank/duplicate target names. Existing implicit categories included with counts. Sidebar lists all categories, click scrolls without filtering, scrolling highlights current section, drag onto directory reuses guarded card-move/undo. Test service persistence/rename/validation and E2E create empty/reload/drop/undo/rename/navigation. No new top toolbar creation buttons.
+
+## TASK-0917 / TC-0917: manual category deletion via menu; empty deletes immediately; nonempty requires destination and transfers cards transactionally. Preserve raw sources and other categories. No AI deletion capability.
+
+## TASK-0918 / TC-0918: explicitly categorized capture creates raw card immediately without AI; repair stranded category-hinted captures on startup; pending thoughts support manual category assignment; manual AI classification runs now independent of auto switch and returns errors/results.

@@ -1,5 +1,13 @@
 # Database Design
 
+## v0.2.9 sources and presentation (0009)
+
+thought_captures retains raw text plus explicit category hint, source title/author/URL. knowledge_images stores content-addressed original images and cached extraction; thought_images links sources to images. Topic points include stable chapter labels and source IDs, rendered into Markdown and Markmap from the same structure. assistant_messages persists references_json. thought_topics archived hides merged topics without deleting originals or old versions. item_appearance stores category/color/manual order. ui_undo also covers schedule, topic metadata and guarded topic merges.
+
+## Topic extension (migration 0007)
+
+`thought_topics`: unique title, monotonically increasing revision, current summary/version, pause flag, dirty/debounce timestamp and retry status. `thought_captures`: immutable raw text, timestamp, optional topic assignment and idempotency key. `thought_versions`: append-only summary snapshots with structured source references. `assistant_preferences`: persisted AI and automatic organization flags. `assistant_messages`: bounded-context conversation history (stored locally). All writes go through services; compare-and-swap revision guards protect concurrent edits. Existing knowledge tables are preserved.
+
 ## Goals
 
 The database should be simple, inspectable, and resilient to change.
@@ -304,6 +312,10 @@ Then rank by:
 - estimated time fit
 - repeated postponement
 
+## Usability extension (migration 0008)
+
+Adds topic category and kind (note/skill/sop), preserving existing topics as notes. ui_undo stores expiring before/after snapshots; service undo rejects intervening edits. Source moves dirty both topics. Original captures and knowledge remain intact.
+
 ## Migration rules
 
 - Every schema change gets a migration file.
@@ -319,3 +331,7 @@ Before destructive migrations:
 - Export key tables to JSON.
 - Run migration on a test database first.
 
+
+
+## v0.2.11 review storage (0010_reviews)
+reviews stores idempotent creation request ID, scope/task link, immutable collected context, conversation, editable draft, revision/status and timestamps. review_exports records unique review/kind to prevent duplicate task or experience creation. Manual card classification uses existing versioned point JSON category/categoryLocked fields, with guarded undo; legacy categories remain in knowledge_items.
