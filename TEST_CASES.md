@@ -1,5 +1,7 @@
 # Test Cases
 
+TC-0901..0905: see REDESIGN_029.md for approved flows and planned automated/manual acceptance.
+
 ## Usability redesign acceptance
 
 - TC-UX-001: Tasks/Assistant/Library are separate pages; no standalone application, waiting or hard-schedule panels; existing records remain preserved.

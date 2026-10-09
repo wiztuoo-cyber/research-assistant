@@ -3,9 +3,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { AssistantPanel } from './AssistantPanel';
+import {PlannerCalendar,ScheduleDetail} from './PlannerCalendar';
 import {UndoNotice,changed} from './interactions';
 import {TaskDateEditor} from './TaskDateEditor';
-import {dateCaption,timeBadge,dayDistance,sortTaskAgenda} from '../domain/timePresentation';
+import {dateCaption,timeBadge,dayDistance,sortTaskAgenda,localDateKey} from '../domain/timePresentation';
 
 interface Task {
   id: string;
@@ -100,284 +101,10 @@ function startOfWeekMonday(now = new Date()): Date {
   return d;
 }
 
-function WeekPlanner() {
-  const [showAssistant, setShowAssistant] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [input, setInput] = useState('');
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('week-planner-opacity') ?? '0.94'));
-  const [message, setMessage] = useState('');
-  const [now, setNow] = useState(new Date());
-  const [selectedTask, setSelectedTask] = useState<TaskDetailsResponse | null>(null);
-  const [inlineDay, setInlineDay] = useState<string | null>(null);
-  const [inlineValue, setInlineValue] = useState('');
-  const [splitPercent, setSplitPercent] = useState(() => Number(localStorage.getItem('week-planner-split') ?? '35'));
-  const plannerBoardRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    void refreshPlanner();
-    const clockTimer = window.setInterval(() => setNow(new Date()), 30000);
-    const dataTimer = window.setInterval(() => { void refreshPlanner(); }, 10000);
-    const onStorage = (event: StorageEvent) => { if (event.key === 'assistant-data-revision') void refreshPlanner(); };
-    window.addEventListener('storage', onStorage);
-    return () => { window.clearInterval(clockTimer); window.clearInterval(dataTimer); window.removeEventListener('storage', onStorage); };
-  }, []);
-
-  useEffect(() => { localStorage.setItem('week-planner-ai', aiEnabled ? '1' : '0'); }, [aiEnabled]);
-  useEffect(() => { localStorage.setItem('week-planner-split', String(splitPercent)); }, [splitPercent]);
-
-  useEffect(() => {
-    const safe = Math.max(0.58, Math.min(1, opacity));
-    localStorage.setItem('week-planner-opacity', String(safe));
-    void api('/api/desktop/widget/opacity', { method: 'POST', body: JSON.stringify({ opacity: safe }) }).catch(() => {});
-  }, [opacity]);
-
-  useEffect(()=>{const fn=()=>void refreshPlanner();window.addEventListener('assistant-changed',fn);return()=>window.removeEventListener('assistant-changed',fn);},[]);
-  async function refreshPlanner() {
-    const [taskResult, personal, assistant] = await Promise.all([
-      api<{ tasks: Task[] }>('/api/tasks/planning'),
-      api<{ schedule: ScheduleItem[] }>('/api/personal/dashboard'),
-      api<{ preferences: { aiEnabled: boolean } }>('/api/assistant/state')
-    ]);
-    setTasks(taskResult.tasks);
-    setScheduleItems(personal.schedule ?? []);
-    setAiEnabled(assistant.preferences.aiEnabled);
-  }
-
-  async function openPlannerTask(taskId: string) {
-    setSelectedTask(await api<TaskDetailsResponse>('/api/tasks/' + taskId + '/details'));
-  }
-
-  const weekDays = useMemo(() => {
-    const monday = startOfWeekMonday(now);
-    return Array.from({ length: 7 }, (_, index) => {
-      const d = new Date(monday); d.setDate(monday.getDate() + index);
-      return { key: dateOnlyLocal(d), weekday: ['周一','周二','周三','周四','周五','周六','周日'][index] };
-    });
-  }, [now]);
-
-  const weekKeys = useMemo(() => new Set(weekDays.map((d) => d.key)), [weekDays]);
-
-  const allTasks = useMemo(() => [...tasks].sort((a, b) => {
-    if (Boolean(a.starred) !== Boolean(b.starred)) return a.starred ? -1 : 1;
-    const aPlan = a.start_at?.slice(0, 10) ?? '9999-99-99';
-    const bPlan = b.start_at?.slice(0, 10) ?? '9999-99-99';
-    if (aPlan !== bPlan) return aPlan.localeCompare(bPlan);
-    if (a.deadline_at && b.deadline_at) return a.deadline_at.localeCompare(b.deadline_at);
-    if (a.deadline_at) return -1; if (b.deadline_at) return 1;
-    return a.title.localeCompare(b.title, 'zh-CN');
-  }), [tasks]);
-
-  function tasksForDay(key: string) {
-    return tasks.filter((task) => task.start_at?.slice(0, 10) === key).sort((a,b) => {
-      const aTimed = Boolean(a.start_at && a.start_at.length > 10);
-      const bTimed = Boolean(b.start_at && b.start_at.length > 10);
-      if (aTimed !== bTimed) return aTimed ? -1 : 1;
-      return (a.start_at ?? '').localeCompare(b.start_at ?? '');
-    });
-  }
-
-  function dayLabelForTask(task: Task): string | null {
-    const key = task.start_at?.slice(0, 10);
-    if (!key || !weekKeys.has(key)) return null;
-    return weekDays.find((item) => item.key === key)?.weekday ?? null;
-  }
-
-  async function addTask(text: string, date?: string) {
-    const value = text.trim(); if (!value) return;
-    try {
-      if (aiEnabled) {
-        const aiText = value;
-        const result = await api<{ summary: string }>('/api/personal/capture', { method: 'POST', body: JSON.stringify({ text: aiText, forcedStartAt: date ?? null }) });
-        setMessage(result.summary);
-      } else {
-        await api('/api/tasks', { method: 'POST', body: JSON.stringify({ createdBy: 'week-planner', task: { title: value, status: 'next', priority: 'medium', startAt: date ?? null } }) });
-        setMessage(date ? '已加入当天计划' : '已加入任务');
-      }
-      setInput(''); await refreshPlanner();
-    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
-  }
-
-  function quickAddForDay(day: { key: string; weekday: string }) {
-    setInlineDay(day.key);
-    setInlineValue('');
-  }
-
-  async function submitInlineDay(day: string) {
-    const value = inlineValue.trim();
-    if (!value) {
-      setInlineDay(null);
-      return;
-    }
-    await addTask(value, day);
-    setInlineValue('');
-    setInlineDay(null);
-  }
-
-  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const board = plannerBoardRef.current;
-    if (!board) return;
-    const rect = board.getBoundingClientRect();
-
-    const move = (moveEvent: PointerEvent) => {
-      const next = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-      setSplitPercent(Math.max(20, Math.min(60, next)));
-    };
-
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
-  }
-
-  async function planTask(taskId: string, date: string | null) {
-    const current = tasks.find((task) => task.id === taskId);
-    const timeSuffix = current?.start_at && current.start_at.length > 10 ? current.start_at.slice(10) : '';
-    const nextStart = date ? date + timeSuffix : null;
-    await api('/api/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify({ createdBy: 'week-planner', task: { startAt: nextStart } }) });
-    await refreshPlanner();
-    if (selectedTask?.task.id === taskId) await openPlannerTask(taskId);
-  }
-
-  function dragStart(event: React.DragEvent, taskId: string) { event.dataTransfer.setData('text/task-id', taskId); event.dataTransfer.effectAllowed = 'move'; }
-  function allowDrop(event: React.DragEvent) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }
-  function dropOnDate(event: React.DragEvent, date: string | null) { event.preventDefault(); const taskId = event.dataTransfer.getData('text/task-id'); if (taskId) void planTask(taskId, date); }
-
-  async function completePlannerTask(taskId: string) {
-    const details = selectedTask?.task.id === taskId
-      ? selectedTask
-      : await api<TaskDetailsResponse>('/api/tasks/' + taskId + '/details');
-    const incomplete = details.steps.filter((step) => !step.completed).length;
-    if (incomplete > 0 && !window.confirm('还有 ' + incomplete + ' 个子任务未完成，仍然完成主任务吗？')) return;
-    await api('/api/tasks/' + taskId + '/complete', { method: 'POST', body: JSON.stringify({ createdBy: 'week-planner' }) });
-    if (selectedTask?.task.id === taskId) setSelectedTask(null);
-    await refreshPlanner();
-  }
-
-  async function togglePlannerStep(step: TaskStep) {
-    await api('/api/tasks/steps/' + step.id, { method: 'PATCH', body: JSON.stringify({ completed: !step.completed }) });
-    if (selectedTask) await openPlannerTask(selectedTask.task.id);
-  }
-
-  function schedulesForDay(key: string) {
-    return scheduleItems
-      .filter((item) => item.status === 'scheduled' && item.start_at?.slice(0, 10) === key)
-      .sort((a, b) => (a.start_at ?? '').localeCompare(b.start_at ?? ''));
-  }
-
-  function scheduleTime(item: ScheduleItem): string | null {
-    if (!item.start_at || item.start_at.length <= 10) return null;
-    const d = new Date(item.start_at);
-    if (Number.isNaN(d.getTime())) return item.start_at.slice(11,16);
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
-  }
-
-  function scheduleCard(item: ScheduleItem) {
-    const time = scheduleTime(item);
-    const kindMap: Record<string,string> = {
-      interview: '面试', written_test: '笔试', meeting: '会议', exam: '考试', other: '日程'
-    };
-    return (
-      <div className='planner-schedule-card' key={'schedule-' + item.id} onDoubleClick={(e) => e.stopPropagation()} title={item.location ? '地点：' + item.location : '固定日程'}>
-        <span className='planner-schedule-kind'>{kindMap[item.kind] ?? '日程'}</span>
-        <span className='planner-schedule-title'>{time ? time + ' ' : ''}{item.title}</span>
-      </div>
-    );
-  }
-
-  const todayKey = dateOnlyLocal(now);
-  const clock = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
-
-  function planTime(task: Task): string | null {
-    if (!task.start_at || task.start_at.length <= 10) return null;
-    const d = new Date(task.start_at); if (Number.isNaN(d.getTime())) return null;
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
-  }
-
-  function plannerTask(task: Task, compact = false) {
-    const plannedDay = dayLabelForTask(task); const time = planTime(task);
-    const overdue = Boolean(task.start_at && task.start_at.slice(0,10) < todayKey);
-    return (
-      <div className={compact ? 'planner-task compact' : 'planner-task'} key={task.id} draggable onDragStart={(e) => dragStart(e, task.id)}>
-        <button className='planner-check' type='button' title='完成' onClick={(e) => { e.stopPropagation(); void completePlannerTask(task.id); }}><Check size={13}/></button>
-        <button className='planner-task-title' type='button' onClick={(e) => { e.stopPropagation(); void openPlannerTask(task.id); }} onDoubleClick={(e) => e.stopPropagation()} title='点击查看详情与子任务'>
-          <span>{task.starred ? '★ ' : ''}{time ? time + ' ' : ''}{task.title}</span>
-          {!compact ? <small>{overdue ? '逾期' : plannedDay ?? ''}</small> : null}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <main className='week-planner-shell'>
-      <div className='planner-drag-strip' title='按住这里拖动桌面挂件' />
-      <header className='week-planner-header'>
-        <form className='planner-capture' onSubmit={(e) => { e.preventDefault(); void addTask(input); }}>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder='输入一个任务……' />
-          <button type='submit'>添加</button>
-        </form>
-        <label className='ai-toggle widget-control'><span>AI</span><input type='checkbox' checked={aiEnabled} onChange={(e) => { const enabled=e.target.checked; void api('/api/assistant/preferences', {method:'PATCH',body:JSON.stringify({aiEnabled:enabled})}).then(()=>setAiEnabled(enabled)).catch(error=>setMessage(String(error))); }} /><span className='toggle-track'><span /></span><small>{aiEnabled ? '开' : '关'}</small></label>
-        <button type='button' onClick={()=>{void api<{supported:boolean}>('/api/desktop/open-main',{method:'POST'}).then(r=>{if(!r.supported)window.open('/','_blank');});}}>打开主面板</button><button type='button' onClick={()=>setShowAssistant(true)}>问助理 / 想法</button>
-        <label className='opacity-control widget-control' title='调整桌面挂件透明度'><span>透明度</span><input type='range' min='0.58' max='1' step='0.02' value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} /></label>
-        <span className='planner-clock'>{clock}</span>
-      </header>
-      {message ? <div className='planner-message'>{message}</div> : null}
-      {showAssistant ? <div className='assistant-overlay'><button className='assistant-close' onClick={()=>{setShowAssistant(false);void refreshPlanner();}}>返回周计划</button><AssistantPanel/></div> : null}
-      <section className='planner-board' ref={plannerBoardRef} style={{ '--planner-left': splitPercent + '%' } as React.CSSProperties}>
-        <aside className='planner-all' onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, null)}>
-          <div className='planner-section-title'><div><strong>所有任务</strong><small>拖到右侧只安排执行日期</small></div><span>{allTasks.length}</span></div>
-          <div className='planner-task-stack'>{allTasks.map((task) => plannerTask(task))}{!allTasks.length ? <p className='planner-empty'>暂无任务</p> : null}</div>
-        </aside>
-        <div className='planner-splitter' onPointerDown={startSplitResize} title='拖动调整左右栏宽度' />
-        <section className='planner-week'>
-          <div className='planner-section-title'><div><strong>本周</strong><small>双击空白添加 · 拖动改计划日期</small></div><span>{weekDays[0].key.slice(5)} — {weekDays[6].key.slice(5)}</span></div>
-          <div className='planner-days'>
-            {weekDays.map((day) => {
-              const dayTasks = tasksForDay(day.key); const daySchedules = schedulesForDay(day.key); const isToday = day.key === todayKey;
-              return <div key={day.key} className={isToday ? 'planner-day today' : 'planner-day'} onDoubleClick={() => quickAddForDay(day)} onDragOver={allowDrop} onDrop={(e) => dropOnDate(e, day.key)}>
-                <div className='planner-day-head'><strong>{day.weekday}</strong><span>{day.key.slice(5).replace('-', '/')}</span>{isToday ? <em>今天</em> : null}</div>
-                <div className='planner-day-tasks'>
-                  {daySchedules.map(scheduleCard)}
-                  {dayTasks.map((task) => plannerTask(task, true))}
-                  {inlineDay === day.key ? (
-                    <form className='planner-inline-add' onSubmit={(e) => { e.preventDefault(); void submitInlineDay(day.key); }} onDoubleClick={(e) => e.stopPropagation()}>
-                      <input autoFocus value={inlineValue} onChange={(e) => setInlineValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Escape') { setInlineDay(null); setInlineValue(''); } }}
-                        onBlur={() => { if (!inlineValue.trim()) setInlineDay(null); }}
-                        placeholder='输入任务，Enter 保存' />
-                    </form>
-                  ) : !dayTasks.length && !daySchedules.length ? <span className='planner-day-hint'>双击添加</span> : null}
-                </div>
-              </div>;
-            })}
-          </div>
-        </section>
-      </section>
-      {selectedTask ? <div className='planner-detail-backdrop' onClick={() => setSelectedTask(null)}>
-        <aside className='planner-detail' onClick={(e) => e.stopPropagation()}>
-          <div className='planner-detail-head'><div><small>任务详情</small><h3>{selectedTask.task.starred ? '★ ' : ''}{selectedTask.task.title}</h3></div><button type='button' className='planner-detail-close' onClick={() => setSelectedTask(null)}><X size={17}/></button></div>
-          {selectedTask.task.notes ? <p className='planner-detail-notes'>{selectedTask.task.notes}</p> : null}
-          <div className='planner-detail-meta'>
-            {selectedTask.task.start_at ? <span>计划：{selectedTask.task.start_at.replace('T',' ').slice(0,16)}</span> : null}
-            {selectedTask.task.deadline_at ? <span>截止：{selectedTask.task.deadline_at.replace('T',' ').slice(0,16)}</span> : null}
-            {selectedTask.task.reminder_at ? <span>提醒：{new Date(selectedTask.task.reminder_at).toLocaleString()}</span> : null}
-          </div>
-          <section><h4>子任务</h4>{selectedTask.steps.length ? <div className='planner-subtasks'>{selectedTask.steps.map((step) => <button key={step.id} type='button' onClick={() => void togglePlannerStep(step)} className={step.completed ? 'planner-subtask done' : 'planner-subtask'}><span className='subtask-box'>{step.completed ? '✓' : ''}</span><span>{step.title}</span></button>)}</div> : <p className='planner-empty'>暂无子任务</p>}</section>
-          {selectedTask.points.length ? <section><h4>要点</h4><ul className='planner-points'>{selectedTask.points.map((point) => <li key={point.id}>{point.content}</li>)}</ul></section> : null}
-          <div className='planner-detail-actions'><button type='button' onClick={() => void completePlannerTask(selectedTask.task.id)}>完成任务</button></div>
-        </aside>
-      </div> : null}
-    </main>
-  );
-}
-
 function App() {
+  const [selectedSchedule,setSelectedSchedule]=useState<ScheduleItem|null>(null);
+  const [itemOrder,setItemOrder]=useState<Record<string,number>>({});
+  useEffect(()=>{void api<{item_id:string;position:number}[]>('/api/appearance').then(rows=>setItemOrder(Object.fromEntries(rows.map(r=>[r.item_id,r.position]))));},[]);
   const [page,setPage]=useState<'tasks'|'assistant'|'library'>('tasks');
   const [libraryTopic,setLibraryTopic]=useState(''),[libraryKey,setLibraryKey]=useState(0);
   const [question,setQuestion]=useState(''),[chatTopic,setChatTopic]=useState(''),[questionKey,setQuestionKey]=useState(0);
@@ -556,16 +283,20 @@ function App() {
   }
 
   const agenda=sortTaskAgenda(tasks);
-  const previous=agenda.filter(t=>t.status!=='today'&&t.start_at&&dayDistance(t.start_at)<0);
+  const previous=agenda.filter(t=>t.status!=='today'&&t.start_at&&dayDistance(t.start_at)<0&&!timeBadge(t.deadline_at,'deadline').overdue);
   const visibleAgenda=agenda.filter(t=>!previous.includes(t));
-  const upcomingEvents=scheduleItems.filter(s=>s.start_at&&(s.end_at?Date.parse(s.end_at)>=Date.now():dayDistance(s.start_at)>=0));
+  const upcomingEvents=scheduleItems.filter(s=>s.status==='scheduled'&&s.start_at&&(s.end_at?Date.parse(s.end_at)>=Date.now():dayDistance(s.start_at)>=0));
+  const overdue=agenda.filter(t=>timeBadge(t.deadline_at,'deadline').overdue);
+  const todayItems=visibleAgenda.filter(t=>!overdue.includes(t)&&(t.status==='today'||Boolean(t.start_at&&dayDistance(t.start_at)===0)||Boolean(t.deadline_at&&dayDistance(t.deadline_at)===0))).sort((a,b)=>Number(b.starred)-Number(a.starred)||(itemOrder[a.id]??0)-(itemOrder[b.id]??0));
+  const laterItems=visibleAgenda.filter(t=>!overdue.includes(t)&&!todayItems.includes(t)&&Boolean(t.start_at||t.deadline_at));
+  const unplanned=visibleAgenda.filter(t=>!todayItems.includes(t)&&!t.start_at&&!t.deadline_at);
 
   function taskList(items: Task[], empty: string) {
     if (!items.length) return <p className="empty-state">{empty}</p>;
     return (
       <ul className="task-list">
         {items.map((task) => (
-          <li key={task.id} className="simple-task-row">
+          <li key={task.id} className="simple-task-row" draggable={todayItems.includes(task)} onDragStart={e=>e.dataTransfer.setData('text/plain',task.id)} onDragOver={e=>{if(todayItems.includes(task))e.preventDefault();}} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData('text/plain');if(id===task.id||!todayItems.some(t=>t.id===id))return;const ids=todayItems.map(t=>t.id).filter(t=>t!==id);ids.splice(ids.indexOf(task.id),0,id);const next=Object.fromEntries(ids.map((t,i)=>[t,i]));void Promise.all(ids.map(t=>api('/api/appearance/'+t,{method:'PATCH',body:JSON.stringify({position:next[t]})}))).then(()=>setItemOrder(old=>({...old,...next}))).catch(e=>setMessage(String(e)));}}>
             <button className="task-main-button" type="button" onClick={() => void openTask(task.id)}>
               <span className="task-title-line">
                 {task.starred ? <Star size={15} fill="currentColor" /> : null}
@@ -576,6 +307,7 @@ function App() {
             <button className="icon-button" type="button" title="完成" onClick={() => void completeTask(task.id)}>
               <Check size={17} />
             </button>
+            <input className="quick-plan-date" aria-label={'安排日期 '+task.title} title="安排哪天做" type="date" value={task.start_at?localDateKey(task.start_at):''} onChange={e=>{const value=e.target.value;let start:string|null=value||null;if(value&&task.start_at&&task.start_at.length>10){const d=new Date(task.start_at),[y,m,day]=value.split('-').map(Number);d.setFullYear(y,m-1,day);start=d.toISOString();}void api('/api/tasks/'+task.id,{method:'PATCH',body:JSON.stringify({task:{startAt:start}})}).then(()=>refresh()).catch(e=>setMessage(String(e)));}}/>
           </li>
         ))}
       </ul>
@@ -602,10 +334,13 @@ function App() {
       <div hidden={page!=='assistant'}><AssistantPanel key={questionKey} initialQuestion={question} initialTopic={chatTopic} onOpenTopic={openLibrary}/></div>
       <div hidden={page!=='library'}><AssistantPanel key={libraryKey} view="library" initialTopic={libraryTopic} legacy={knowledgeItems} onOpenLegacy={openKnowledge} onAsk={(id,title)=>ask('帮我梳理“'+title+'”这篇笔记的要点与未明确的问题',id)}/></div>
       <div hidden={page!=='tasks'} className="task-page">
-        <header className="page-heading"><div><h2>待办事项 <small>{tasks.length}</small></h2><p>今天优先，其余按截止时间排列。</p></div><button onClick={()=>ask('今天先做什么？请结合截止时间和日程给出建议。')}>帮我排优先级</button></header>
+        <header className="page-heading"><div><h2>待办事项 <small>{tasks.length}</small></h2><p>安排今天，也看清接下来。</p></div><div className="assistant-controls"><button onClick={()=>{setPage('assistant');window.dispatchEvent(new Event('assistant-record-task'));}}>＋添加事项</button><button onClick={()=>void api<{supported:boolean}>('/api/desktop/open-planner',{method:'POST'}).then(r=>{if(!r.supported)window.open('/?view=week','_blank');}).catch(e=>setMessage(String(e)))}>打开周挂件</button></div></header>
+        {overdue.length?<section className="overdue-section"><h3>已过截止 · {overdue.length}</h3>{taskList(overdue,'')}</section>:null}
         {previous.length?<details className="previous-plans"><summary>之前安排的还有 {previous.length} 项未完成</summary>{taskList(previous,'')}</details>:null}
-        {upcomingEvents.length?<ul className="inline-events">{upcomingEvents.map(item=><li key={item.id}><CalendarDays size={17}/><strong>{item.title}</strong><small>{dateCaption(item.start_at)}</small><span className="countdown">{timeBadge(item.start_at,'event').label}</span></li>)}</ul>:null}
-        {taskList(visibleAgenda,previous.length?'其余暂无待办。':'暂无待办。到助理页选择“记任务 / 日程”开始记录。')}
+        <div className="task-dashboard"><section className="today-column"><h3>今天 <small>{todayItems.length}</small></h3>{taskList(todayItems,'今天还没有安排，留一点从容。')}</section><section className="later-column"><h3>接下来 <small>{laterItems.length}</small></h3>{taskList(laterItems,'接下来暂无安排。')}<details open className="unplanned-section"><summary>未安排 · {unplanned.length}</summary>{taskList(unplanned,'暂无未安排事项。')}</details></section></div>
+        {upcomingEvents.length?<ul className="inline-events">{upcomingEvents.map(item=><li key={item.id}><CalendarDays size={17}/><button className="link-button" onClick={()=>setSelectedSchedule(item)}>{item.title}</button><small>{dateCaption(item.start_at)}</small><span className="countdown">{timeBadge(item.start_at,'event').label}</span></li>)}</ul>:null}
+        {scheduleItems.some(s=>s.status==='scheduled'&&!upcomingEvents.includes(s))?<details><summary>过去或未安排的固定事项</summary>{scheduleItems.filter(s=>s.status==='scheduled'&&!upcomingEvents.includes(s)).map(s=><button key={s.id} className="link-button" onClick={()=>setSelectedSchedule(s)}>{s.title} · {dateCaption(s.start_at)}</button>)}</details>:null}
+        {selectedSchedule?<ScheduleDetail item={selectedSchedule} onClose={()=>setSelectedSchedule(null)} onSaved={()=>void refresh()}/>:null}
 
       <section className="history-entry">
         <button className="link-button" type="button" onClick={() => setShowCompleted(!showCompleted)}>
@@ -754,4 +489,4 @@ function App() {
 
 const isWeekPlanner = new URLSearchParams(window.location.search).get('view') === 'week';
 document.documentElement.classList.toggle('week-widget-page', isWeekPlanner);
-createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <WeekPlanner /> : <App />}<UndoNotice/></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <PlannerCalendar /> : <App />}<UndoNotice/></React.StrictMode>);

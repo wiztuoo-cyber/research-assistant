@@ -350,6 +350,30 @@ export const migrations: Migration[] = [
       );
     `
   }
+  ,{
+    id: '0009_knowledge_sources',
+    sql: `
+      alter table thought_captures add column category_hint text;
+      alter table thought_captures add column source_title text;
+      alter table thought_captures add column source_author text;
+      alter table thought_captures add column source_url text;
+      alter table thought_topics add column archived integer not null default 0;
+      alter table assistant_messages add column references_json text not null default '[]';
+      create table knowledge_images (
+        id text primary key, digest text not null unique, mime text not null,
+        data text not null, extracted_text text, created_at text not null
+      );
+      create table thought_images (
+        thought_id text not null references thought_captures(id),
+        image_id text not null references knowledge_images(id),
+        primary key(thought_id,image_id)
+      );
+      create table item_appearance (
+        item_id text primary key, category text not null default '', color text,
+        position real not null default 0
+      );
+    `
+  }
 ];
 
 export function ensureMigrationTable(db: DatabaseSync): void {

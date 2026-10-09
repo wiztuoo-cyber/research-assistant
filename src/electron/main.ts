@@ -434,6 +434,7 @@ function keepPlannerOnDesktop(): void {
 async function startLocalServer(): Promise<number> {
   const web = createApp(db!, {
     openMainWindow: showWindow,
+    openPlanner: showPlanner,
     getShortcutWarning: ()=>shortcutWarning,
     setWidgetOpacity: (opacity) => {
       if (plannerWindow && !plannerWindow.isDestroyed()) plannerWindow.setOpacity(opacity);

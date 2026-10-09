@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import {recordTaskEvent} from './events.js';
-type Kind = 'task'|'thought'|'knowledge';
-const tables = { task:'tasks', thought:'thought_captures', knowledge:'knowledge_items' };
+import {undoMerge} from './libraryManagement.js';
+type Kind = 'task'|'thought'|'knowledge'|'schedule'|'topic';
+const tables = { task:'tasks', thought:'thought_captures', knowledge:'knowledge_items',schedule:'schedule_items',topic:'thought_topics' };
 export function undoable<T>(db:DatabaseSync,kind:Kind,id:string,action:()=>T):T & {undoToken:string} {
   const before=db.prepare(`select * from ${tables[kind]} where id=?`).get(id);
   if(!before) throw new Error('记录不存在。');
@@ -16,11 +17,12 @@ export function undoable<T>(db:DatabaseSync,kind:Kind,id:string,action:()=>T):T 
 export function undoAction(db:DatabaseSync,token:string) {
   const item=db.prepare('select * from ui_undo where id=?').get(token);
   if(!item || String(item.expires_at)<new Date().toISOString()) throw new Error('撤销已过期，请到详情或回收站处理。');
+  if(item.kind==='merge')return undoMerge(db,item);
   const kind=item.kind as Kind;
   const current=db.prepare(`select * from ${tables[kind]} where id=?`).get(String(item.target_id));
   if(JSON.stringify(current)!==item.after_json) throw new Error('记录已被再次修改，不能覆盖后续操作。');
   const before=JSON.parse(String(item.before_json));
-  const fields=kind==='task'?['status','completed_at','deleted_at','updated_at']:kind==='knowledge'?['status','updated_at']:['topic_id','assignment_locked','classification_attempted'];
+  const fields=kind==='topic'?['title','category','kind','revision']:kind==='schedule'?['title','start_at','end_at','reminder_at','location','status','notes','updated_at']:kind==='task'?['status','completed_at','deleted_at','updated_at']:kind==='knowledge'?['status','updated_at']:['topic_id','assignment_locked','classification_attempted'];
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare(`update ${tables[kind]} set ${fields.map(f=>`${f}=?`).join(',')} where id=?`).run(...fields.map(f=>before[f]),String(item.target_id));

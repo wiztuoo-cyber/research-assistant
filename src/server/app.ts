@@ -30,6 +30,7 @@ import { unifiedCapture } from '../services/unifiedCapture.js';
 import { aiCapture } from '../services/aiCapture.js';
 import { addTaskPoint, addTaskStep, deleteTaskPoint, deleteTaskStep, getTaskDetails, setTaskStarred, setTaskStepCompleted, updateTaskPointContent, updateTaskStepTitle } from '../services/taskDetails.js';
 import { getAiSettingsStatus, saveAiSettings } from '../services/settings.js';
+import {updateSchedule,saveAppearance} from '../services/plannerItems.js';
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = process.env.API_TOKEN;
@@ -59,6 +60,7 @@ function asyncHandler(
 }
 
 export interface DesktopControls {
+  openPlanner?: () => void;
   openMainWindow?: () => void;
   getShortcutWarning?: () => string;
   setWidgetOpacity?: (opacity: number) => void;
@@ -75,11 +77,15 @@ function pickField(input: Record<string, unknown>, camel: string, snake: string)
 
 export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {}): express.Express {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({limit:'8mb'}));
   app.use('/api', requireAuth);
   app.use('/api/assistant', assistantRoutes(db));
   app.post('/api/undo/:token',(req,res)=>res.json(undoAction(db,String(req.params.token))));
   app.post('/api/desktop/open-main',(_req,res)=>{desktopControls.openMainWindow?.();res.json({supported:Boolean(desktopControls.openMainWindow)});});
+  app.post('/api/desktop/open-planner',(_req,res)=>{desktopControls.openPlanner?.();res.json({supported:Boolean(desktopControls.openPlanner)});});
+  app.get('/api/appearance',(_req,res)=>res.json(db.prepare('select * from item_appearance').all()));
+  app.patch('/api/appearance/:id',(req,res)=>res.json(saveAppearance(db,String(req.params.id),req.body)));
+  app.patch('/api/personal/schedule/:id',(req,res)=>res.json(undoable(db,'schedule',String(req.params.id),()=>updateSchedule(db,String(req.params.id),req.body))));
   app.get('/api/desktop/shortcuts',(_req,res)=>res.json({warning:desktopControls.getShortcutWarning?.()??''}));
 
   app.get('/api/health', (_req, res) => {

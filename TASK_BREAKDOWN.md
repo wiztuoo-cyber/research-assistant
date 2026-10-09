@@ -1,5 +1,9 @@
 # Task Breakdown
 
+## Approved v0.2.9 implementation
+
+TASK-0901..0905 and TC-0901..0905 are specified in REDESIGN_029.md. Implemented with local automated verification; real-provider and native-window acceptance remain manual.
+
 ## 2026-10-08: Confirmed usability redesign
 
 Status: Implemented; automated coverage passed. Windows shell interactions and live model quality require manual acceptance.

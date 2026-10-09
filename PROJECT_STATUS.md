@@ -2,6 +2,23 @@
 
 Last updated: 2026-10-09
 
+## v0.2.9 unified assistant, knowledge and calendar
+
+TASK-0901..0905 implemented against TC-0901..0905 (REDESIGN_029.md).
+
+- Unified composer: two mutually exclusive thought/task toggles, neither means read-only chat; mode drafts retained, Enter/IME handling retained, newest exchanges first.
+- Category/topic/chapter knowledge structure with Markmap navigation and sanitized Markdown reading. AI may create missing categories, respects explicit category hints, merges repeated claims with all supporting sources, and preserves conditions/conflicts. Original material remains stored; source metadata and screenshots are available in a collapsed Sources section.
+- Metadata edit/move and topic merge support guarded undo; manual summary revisions remain recoverable and pause automatic rewriting. Backdrop/Escape close checks unsaved changes.
+- Knowledge retrieval searches stored originals and legacy knowledge, returns bounded relevant evidence to the same assistant and persists validated references with each answer. Retrieval is lexical (including Chinese bigrams), not a claim of exhaustive semantic search. Missing evidence must be disclosed.
+- Paste/drop/upload PNG/JPEG/WebP images, local deduplication and extraction cache. A separately configured HTTPS chat-completions-compatible vision endpoint/model/key is required. No claim that the existing text model supports images. Real vision/provider quality remains manual acceptance; source URLs are supplied by the user, not guessed or automatically crawled.
+- Task page uses today/upcoming/unplanned groups without category navigation; overdue and unfinished past plans remain distinct. Today order is draggable; dates directly editable. Main opens the week widget. Fixed events can be edited/completed/canceled with guarded undo.
+- FullCalendar weekly grid: single-day dots, explicit cross-day bars, category color defaults and task color overrides. Dragging tasks changes plan dates only; previous/next/today navigation and unscheduled drag-in are available.
+- Migration 0009 adds source/image metadata, topic archive flag, answer references and item presentation metadata; originals and old tables preserved.
+- Local checks: 76 unit/service/API tests, 6 Edge E2E flows, TypeScript, db:check and production build passed during implementation. Final exact-head GitHub checks and Windows packaging tracked in PR #2.
+- Manual acceptance: actual native Windows window/shortcut behavior, real provider image parsing and nuanced classification/summary quality. Phone share extensions and live social-post crawling are not implemented; desktop accepts copied text, URLs and screenshots.
+
+Previous release:
+
 ## v0.2.8 usability redesign
 
 TASK-0801..0803 implemented; coverage TC-UX-001..007.
