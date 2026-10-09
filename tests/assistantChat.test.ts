@@ -21,9 +21,9 @@ describe('read-only assistant',()=>{
     const result=await askAssistant(db,{text:'今天先做什么？',topicId:topic.id,minutes:60},async(system,input)=>{
       const ctx=input as any;
       expect(ctx.tasks[0]).toMatchObject({id:t.id,start_at:'2026-10-08',deadline_at:'2026-10-10',estimated_minutes:90});
-      expect(ctx.schedules[0].id).toBe(s.id);expect(ctx.topic.sources[0].text).toContain('还没有决定');expect(ctx.availableMinutes).toBe(60);
+      expect(ctx.schedules[0].id).toBe(s.id);expect(ctx.topic).toBeNull();expect(ctx.availableMinutes).toBe(60);
       expect(system).toContain('不能声称已经');
-      return {answer:'先准备面试；论文预计90分钟，超过当前60分钟。',references:[{id:t.id,label:'论文'},{id:thought.id,label:'想法'}]};
+      return {answer:'先准备面试；论文预计90分钟，超过当前60分钟。',references:[{id:t.id,label:'论文'}]};
     },new Date('2026-10-08T04:00:00Z'));
     expect(result.provider).toBe('deepseek');expect(db.prepare('select * from tasks').all()).toEqual(before);
   });

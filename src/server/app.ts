@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { assistantRoutes } from './assistantRoutes.js';
 import { assistantPreferences } from '../services/topics.js';
+import { undoable, undoAction } from '../services/undo.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { createAiSuggestion, acceptAiSuggestionForTask } from '../services/aiSuggestions.js';
 import { scanAiTasks, syncAiScanReminders } from '../services/aiAutomation.js';
@@ -58,6 +59,8 @@ function asyncHandler(
 }
 
 export interface DesktopControls {
+  openMainWindow?: () => void;
+  getShortcutWarning?: () => string;
   setWidgetOpacity?: (opacity: number) => void;
   getWidgetOpacity?: () => number;
   getWidgetBounds?: () => { width: number; height: number } | null;
@@ -75,6 +78,9 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   app.use(express.json());
   app.use('/api', requireAuth);
   app.use('/api/assistant', assistantRoutes(db));
+  app.post('/api/undo/:token',(req,res)=>res.json(undoAction(db,String(req.params.token))));
+  app.post('/api/desktop/open-main',(_req,res)=>{desktopControls.openMainWindow?.();res.json({supported:Boolean(desktopControls.openMainWindow)});});
+  app.get('/api/desktop/shortcuts',(_req,res)=>res.json({warning:desktopControls.getShortcutWarning?.()??''}));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
@@ -172,15 +178,14 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   });
 
   app.post('/api/tasks/:id/complete', (req, res) => {
-    const result = req.body.completeDuplicates === false
-      ? { task: completeTask(db, req.params.id, req.body.createdBy ?? 'api'), completedIds: [req.params.id] }
-      : completeTaskAndDuplicates(db, req.params.id, req.body.createdBy ?? 'api');
+    const result = req.body.completeDuplicates === true
+      ? completeTaskAndDuplicates(db, req.params.id, req.body.createdBy ?? 'api')
+      : undoable(db,'task',req.params.id,()=>({task:completeTask(db,req.params.id,req.body.createdBy??'api'),completedIds:[req.params.id]}));
     res.json(result);
   });
 
   app.post('/api/tasks/:id/trash', (req, res) => {
-    const task = trashTask(db, req.params.id, req.body.createdBy ?? 'web');
-    res.json({ task });
+    res.json(undoable(db,'task',req.params.id,()=>({task:trashTask(db,req.params.id,req.body.createdBy??'web')})));
   });
 
   app.post('/api/tasks/:id/restore', (req, res) => {
@@ -311,8 +316,7 @@ export function createApp(db: DatabaseSync, desktopControls: DesktopControls = {
   });
 
   app.delete('/api/personal/knowledge/:id', (req, res) => {
-    const item = archiveKnowledgeItem(db, req.params.id);
-    res.json({ item });
+    res.json(undoable(db,'knowledge',req.params.id,()=>({item:archiveKnowledgeItem(db,req.params.id)})));
   });
 
   app.post('/api/personal/capture', asyncHandler(async (req, res) => {

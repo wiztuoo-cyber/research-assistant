@@ -1,5 +1,15 @@
 # Test Cases
 
+## Usability redesign acceptance
+
+- TC-UX-001: Tasks/Assistant/Library are separate pages; no standalone application, waiting or hard-schedule panels; existing records remain preserved.
+- TC-UX-002: Three direct mode buttons; Enter submits once, Ctrl+Enter inserts a newline, composition Enter never submits; failure keeps input and success keeps focus.
+- TC-UX-003: All topic documents and legacy knowledge are searchable in Library. Details provide editable title/category/kind, source/history, direct additions and source-move undo. No copied or divergent topic summaries.
+- TC-UX-004: Today tasks first, deadline ordering thereafter, visible unfinished past plans, local-day countdowns. Past planned dates are not deadline overdue. Actual timed deadlines distinguish passed hours from calendar days. Dates editable in task detail.
+- TC-UX-005: Unfinished-list queries list all active tasks, priority queries recommend; stale selected topics do not scope global task questions; unsupported local queries do not fabricate answers.
+- TC-UX-006: Completion affects only clicked task by default; undo completion/trash restores original status, preserves dates, rejects intervening edits; visible UI undo also supports source moves and knowledge archival.
+- TC-UX-007: Widget main-window button and desktop endpoint tested automatically; tray single click, second launch, focus/restore and shortcut registration require Windows manual smoke check.
+
 ## Topic and assistant acceptance (2026-10-08)
 
 - TC-TOPIC-001: Migration preserves existing tasks/knowledge; captures preserve exact raw text; repeated request ID is idempotent.

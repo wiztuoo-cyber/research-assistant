@@ -13,6 +13,8 @@ import { createApp } from '../server/app.js';
 import { startTopicWorker } from '../services/topics.js';
 
 let stopTopics: (()=>void) | undefined;
+let shortcutWarning = '';
+let pendingMainWindow = false;
 
 let mainWindow: BrowserWindow | null = null;
 let plannerWindow: BrowserWindow | null = null;
@@ -338,6 +340,10 @@ function saveWidgetBounds(): void {
 }
 
 function showWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (!localBaseUrl) { pendingMainWindow=true; return; }
+    createWindow(localBaseUrl);
+  }
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
@@ -427,6 +433,8 @@ function keepPlannerOnDesktop(): void {
 
 async function startLocalServer(): Promise<number> {
   const web = createApp(db!, {
+    openMainWindow: showWindow,
+    getShortcutWarning: ()=>shortcutWarning,
     setWidgetOpacity: (opacity) => {
       if (plannerWindow && !plannerWindow.isDestroyed()) plannerWindow.setOpacity(opacity);
     },
@@ -539,8 +547,8 @@ function createTray(): void {
       }
     }
   ]));
-  tray.on('click', showPlanner);
-  tray.on('double-click', showPlanner);
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
 }
 
 function createWindow(url: string): void {
@@ -577,7 +585,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', showPlanner);
+  app.on('second-instance', showWindow);
 
   app.whenReady().then(async () => {
     const userData = app.getPath('userData');
@@ -601,6 +609,7 @@ if (!gotLock) {
     localBaseUrl = `http://127.0.0.1:${port}`;
     createWindow(localBaseUrl);
     mainWindow?.hide();
+    if (pendingMainWindow) { pendingMainWindow=false; showWindow(); }
     createPlannerWindow(localBaseUrl);
     createTray();
 
@@ -609,9 +618,13 @@ if (!gotLock) {
     checkWindowsReminders();
 
     globalShortcut.register('CommandOrControl+Alt+A', showPlanner);
+    if (!globalShortcut.register('CommandOrControl+Alt+M', showWindow)) {
+      shortcutWarning='Ctrl+Alt+M 已被其他程序占用，请用挂件按钮或托盘打开主面板。';
+      dialog.showMessageBox({type:'info',title:'主面板快捷键未启用',message:shortcutWarning});
+    }
   });
 
-  app.on('activate', showPlanner);
+  app.on('activate', showWindow);
 
   app.on('before-quit', () => {
     quitting = true;

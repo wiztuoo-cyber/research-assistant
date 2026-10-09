@@ -7,6 +7,7 @@ import { aiCapture } from '../services/aiCapture.js';
 import { createTask } from '../services/tasks.js';
 import { textValue } from '../services/assistantModel.js';
 import { copyKnowledgeToTopic } from '../services/topics.js';
+import { undoable } from '../services/undo.js';
 
 export function assistantRoutes(db: DatabaseSync) {
   const router=Router();
@@ -21,7 +22,7 @@ export function assistantRoutes(db: DatabaseSync) {
   router.post('/thoughts',wrap((req,res)=>res.status(201).json(captureThought(db,req.body))));
   router.patch('/thoughts/:id',wrap((req,res)=>{
     if (req.body.topicId !== null && typeof req.body.topicId!=='string') throw new Error('请选择目标主题。');
-    moveThought(db,String(req.params.id),req.body.topicId); res.json({ok:true});
+    res.json(undoable(db,'thought',String(req.params.id),()=>{moveThought(db,String(req.params.id),req.body.topicId);return {ok:true};}));
   }));
   router.post('/classify/retry',wrap((_req,res)=>{retryClassification(db);res.json({ok:true});}));
   router.post('/chat',wrap(async(req,res)=>res.json(await askAssistant(db,req.body))));

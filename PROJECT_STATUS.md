@@ -1,6 +1,20 @@
 # Project Status
 
-Last updated: 2026-10-08
+Last updated: 2026-10-09
+
+## v0.2.8 usability redesign
+
+TASK-0801..0803 implemented; coverage TC-UX-001..007.
+
+- Three pages: tasks, assistant, searchable knowledge library. Topic details support sources, history, append, title/category and note/skill/SOP metadata.
+- Explicit modes and separate drafts; Enter submits, Ctrl+Enter inserts newline, IME selection is protected.
+- Removed standalone recruitment/waiting/event panels without deleting data. Events remain inline; tasks show countdowns and previous unfinished plans.
+- All-unfinished queries use the full local list without AI. Global task questions ignore selected notes. Completion affects only the clicked task; guarded undo covers completion, trash, archive and source moves.
+- Main window entry through widget button, tray click, repeated launch and Ctrl+Alt+M; Ctrl+Alt+A retains widget behavior.
+- Verification: lint, db:check and production build passed; 69 unit/service/API tests and 5 Edge E2E tests passed during implementation. Final CI and Windows packaging run in PR #2.
+- Manual acceptance remains for actual Windows tray/shortcut behavior and real DeepSeek semantic quality. No production personal data was used in tests.
+
+Earlier version notes follow.
 
 ## Current Windows extension: v0.2.7
 

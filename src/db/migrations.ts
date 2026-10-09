@@ -338,6 +338,17 @@ export const migrations: Migration[] = [
         created_at text not null
       );
     `
+  },
+  {
+    id: '0008_usability',
+    sql: `
+      alter table thought_topics add column category text;
+      alter table thought_topics add column kind text not null default 'note' check(kind in ('note','skill','sop'));
+      create table ui_undo (
+        id text primary key, kind text not null, target_id text not null,
+        before_json text not null, after_json text not null, expires_at text not null
+      );
+    `
   }
 ];
 

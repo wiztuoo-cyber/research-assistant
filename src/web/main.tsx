@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { AssistantPanel } from './AssistantPanel';
+import {UndoNotice,changed} from './interactions';
+import {TaskDateEditor} from './TaskDateEditor';
+import {dateCaption,timeBadge,dayDistance,sortTaskAgenda} from '../domain/timePresentation';
 
 interface Task {
   id: string;
@@ -77,7 +80,7 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const data = await response.json() as T;
   const method = (options?.method ?? 'GET').toUpperCase();
   if (method !== 'GET') {
-    try { localStorage.setItem('assistant-data-revision', String(Date.now())); } catch {}
+    try { changed(data as {undoToken?:string}); } catch {}
   }
   return data;
 }
@@ -130,6 +133,7 @@ function WeekPlanner() {
     void api('/api/desktop/widget/opacity', { method: 'POST', body: JSON.stringify({ opacity: safe }) }).catch(() => {});
   }, [opacity]);
 
+  useEffect(()=>{const fn=()=>void refreshPlanner();window.addEventListener('assistant-changed',fn);return()=>window.removeEventListener('assistant-changed',fn);},[]);
   async function refreshPlanner() {
     const [taskResult, personal, assistant] = await Promise.all([
       api<{ tasks: Task[] }>('/api/tasks/planning'),
@@ -319,7 +323,7 @@ function WeekPlanner() {
           <button type='submit'>添加</button>
         </form>
         <label className='ai-toggle widget-control'><span>AI</span><input type='checkbox' checked={aiEnabled} onChange={(e) => { const enabled=e.target.checked; void api('/api/assistant/preferences', {method:'PATCH',body:JSON.stringify({aiEnabled:enabled})}).then(()=>setAiEnabled(enabled)).catch(error=>setMessage(String(error))); }} /><span className='toggle-track'><span /></span><small>{aiEnabled ? '开' : '关'}</small></label>
-        <button type='button' onClick={()=>setShowAssistant(true)}>问助理 / 想法</button>
+        <button type='button' onClick={()=>{void api<{supported:boolean}>('/api/desktop/open-main',{method:'POST'}).then(r=>{if(!r.supported)window.open('/','_blank');});}}>打开主面板</button><button type='button' onClick={()=>setShowAssistant(true)}>问助理 / 想法</button>
         <label className='opacity-control widget-control' title='调整桌面挂件透明度'><span>透明度</span><input type='range' min='0.58' max='1' step='0.02' value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} /></label>
         <span className='planner-clock'>{clock}</span>
       </header>
@@ -374,6 +378,12 @@ function WeekPlanner() {
 }
 
 function App() {
+  const [page,setPage]=useState<'tasks'|'assistant'|'library'>('tasks');
+  const [libraryTopic,setLibraryTopic]=useState(''),[libraryKey,setLibraryKey]=useState(0);
+  const [question,setQuestion]=useState(''),[chatTopic,setChatTopic]=useState(''),[questionKey,setQuestionKey]=useState(0);
+  function openLibrary(id:string){setLibraryTopic(id);setLibraryKey(k=>k+1);setPage('library');}
+  function ask(text:string,topic=''){setChatTopic(topic);setQuestion(text);setQuestionKey(k=>k+1);setPage('assistant');}
+  useEffect(()=>{const fn=()=>void refresh();window.addEventListener('assistant-changed',fn);return()=>window.removeEventListener('assistant-changed',fn);},[]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -545,16 +555,10 @@ function App() {
     await openTask(selectedTask.task.id);
   }
 
-  const groups = useMemo(() => {
-    const todayKey = dateOnlyLocal(new Date());
-    const plannedToday = (t: Task) => t.start_at?.slice(0, 10) === todayKey;
-    return {
-      today: tasks.filter((t) => t.status === 'today' || plannedToday(t)),
-      week: tasks.filter((t) => !plannedToday(t) && (t.status === 'next' || t.status === 'scheduled')),
-      waiting: tasks.filter((t) => t.status === 'waiting'),
-      long: tasks.filter((t) => t.status === 'someday')
-    };
-  }, [tasks]);
+  const agenda=sortTaskAgenda(tasks);
+  const previous=agenda.filter(t=>t.status!=='today'&&t.start_at&&dayDistance(t.start_at)<0);
+  const visibleAgenda=agenda.filter(t=>!previous.includes(t));
+  const upcomingEvents=scheduleItems.filter(s=>s.start_at&&(s.end_at?Date.parse(s.end_at)>=Date.now():dayDistance(s.start_at)>=0));
 
   function taskList(items: Task[], empty: string) {
     if (!items.length) return <p className="empty-state">{empty}</p>;
@@ -567,7 +571,7 @@ function App() {
                 {task.starred ? <Star size={15} fill="currentColor" /> : null}
                 <strong>{task.title}</strong>
               </span>
-              <small>{task.start_at ? `计划 ${task.start_at.replace('T',' ').slice(0,16)}` : ''}{task.start_at && task.deadline_at ? ' · ' : ''}{task.deadline_at ? `截止 ${task.deadline_at.replace('T',' ').slice(0,16)}` : ''}</small>
+              <small>{task.start_at?timeBadge(task.start_at,'plan').label:'未安排执行日期'}{task.status==='waiting'?' · 等待中':''}</small><span className={timeBadge(task.deadline_at,'deadline').overdue?'countdown overdue':'countdown'} title={task.deadline_at?dateCaption(task.deadline_at):'点击设置日期'}>{timeBadge(task.deadline_at,'deadline').label}</span>
             </button>
             <button className="icon-button" type="button" title="完成" onClick={() => void completeTask(task.id)}>
               <Check size={17} />
@@ -583,7 +587,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>私人助理</h1>
-          <p>日程、秋招、待办与 SOP 都保存在本地 SQLite</p>
+          <p>安排事情，积累想法。</p>
         </div>
         <div className="top-actions">
           <span className={aiConfigured ? 'ai-status connected' : 'ai-status'}>{aiConfigured ? 'DeepSeek 已连接' : '本地模式'}</span>
@@ -594,66 +598,14 @@ function App() {
 
       {message ? <div className="status-line">{message}</div> : null}
 
-      <AssistantPanel />
-
-      <section className="planning-grid">
-        <div className="panel task-bucket">
-          <div className="panel-heading"><Check size={19}/><h2>今天</h2></div>
-          {taskList(groups.today, '今天暂无任务。')}
-        </div>
-        <div className="panel task-bucket">
-          <div className="panel-heading"><CalendarDays size={19}/><h2>本周 / 近期</h2></div>
-          {taskList(groups.week, '暂无本周或近期任务。')}
-        </div>
-        <div className="panel task-bucket">
-          <div className="panel-heading"><RefreshCw size={19}/><h2>等待跟进</h2></div>
-          {taskList(groups.waiting, '暂无等待事项。')}
-        </div>
-        <div className="panel task-bucket compact-bucket">
-          <div className="panel-heading"><BookOpen size={19}/><h2>长期任务</h2></div>
-          <button className="link-button" type="button" onClick={() => setShowLongTerm(!showLongTerm)}>
-            {groups.long.length} 项 {showLongTerm ? '收起' : '查看'}
-          </button>
-          {showLongTerm ? taskList(groups.long, '暂无长期任务。') : null}
-        </div>
-      </section>
-
-      <section className="personal-grid">
-        <div className="panel">
-          <div className="panel-heading"><CalendarDays size={19}/><h2>硬日程</h2></div>
-          <ul className="simple-list stacked-list">
-            {scheduleItems.slice(0, 10).map((item) => (
-              <li key={item.id}><div><strong>{item.title}</strong><small>{item.kind}{item.start_at ? ` · ${new Date(item.start_at).toLocaleString()}` : ''}</small></div></li>
-            ))}
-          </ul>
-          {!scheduleItems.length ? <p className="empty-state">暂无面试、笔试、会议或截止日程。</p> : null}
-        </div>
-
-        <div className="panel">
-          <div className="panel-heading"><BriefcaseBusiness size={19}/><h2>秋招进展</h2></div>
-          <ul className="simple-list stacked-list">
-            {applications.slice(0, 10).map((item) => (
-              <li key={item.id}><div><strong>{item.company}</strong><small>{item.role ?? '未填写岗位'} · {item.status}{item.event_at ? ` · ${new Date(item.event_at).toLocaleString()}` : ''}</small></div></li>
-            ))}
-          </ul>
-          {!applications.length ? <p className="empty-state">暂无秋招记录。</p> : null}
-        </div>
-
-        <div className="panel">
-          <div className="panel-heading"><BookOpen size={19}/><h2>SOP / 技能 / 知识</h2></div>
-          <ul className="simple-list stacked-list">
-            {knowledgeItems.slice(0, 10).map((item) => (
-              <li key={item.id}>
-                <button className="knowledge-row" type="button" onClick={() => openKnowledge(item)}>
-                  <strong>{item.title}</strong>
-                  <small>{item.category ?? item.kind}</small>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {!knowledgeItems.length ? <p className="empty-state">暂无知识记录。</p> : null}
-        </div>
-      </section>
+      <nav className="main-tabs" aria-label="主导航">{([['tasks','任务'],['assistant','助理'],['library','知识库']] as const).map(([id,label])=><button key={id} aria-current={page===id?'page':undefined} onClick={()=>setPage(id)}>{label}</button>)}</nav>
+      <div hidden={page!=='assistant'}><AssistantPanel key={questionKey} initialQuestion={question} initialTopic={chatTopic} onOpenTopic={openLibrary}/></div>
+      <div hidden={page!=='library'}><AssistantPanel key={libraryKey} view="library" initialTopic={libraryTopic} legacy={knowledgeItems} onOpenLegacy={openKnowledge} onAsk={(id,title)=>ask('帮我梳理“'+title+'”这篇笔记的要点与未明确的问题',id)}/></div>
+      <div hidden={page!=='tasks'} className="task-page">
+        <header className="page-heading"><div><h2>待办事项 <small>{tasks.length}</small></h2><p>今天优先，其余按截止时间排列。</p></div><button onClick={()=>ask('今天先做什么？请结合截止时间和日程给出建议。')}>帮我排优先级</button></header>
+        {previous.length?<details className="previous-plans"><summary>之前安排的还有 {previous.length} 项未完成</summary>{taskList(previous,'')}</details>:null}
+        {upcomingEvents.length?<ul className="inline-events">{upcomingEvents.map(item=><li key={item.id}><CalendarDays size={17}/><strong>{item.title}</strong><small>{dateCaption(item.start_at)}</small><span className="countdown">{timeBadge(item.start_at,'event').label}</span></li>)}</ul>:null}
+        {taskList(visibleAgenda,previous.length?'其余暂无待办。':'暂无待办。到助理页选择“记任务 / 日程”开始记录。')}
 
       <section className="history-entry">
         <button className="link-button" type="button" onClick={() => setShowCompleted(!showCompleted)}>
@@ -692,6 +644,7 @@ function App() {
         ) : null}
       </section>
 
+      </div>
       {showSettings ? (
         <div className="drawer-backdrop" onClick={() => setShowSettings(false)}>
           <aside className="task-drawer settings-drawer" onClick={(event) => event.stopPropagation()}>
@@ -749,6 +702,7 @@ function App() {
               <button className="icon-button" type="button" onClick={() => setSelectedTask(null)}><X size={18}/></button>
             </div>
 
+            <TaskDateEditor key={selectedTask.task.id} task={selectedTask.task} onSaved={()=>{void openTask(selectedTask.task.id);void refresh();}}/>
             <section className="drawer-section">
               <h3>子任务</h3>
               {selectedTask.steps.length ? (
@@ -800,4 +754,4 @@ function App() {
 
 const isWeekPlanner = new URLSearchParams(window.location.search).get('view') === 'week';
 document.documentElement.classList.toggle('week-widget-page', isWeekPlanner);
-createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <WeekPlanner /> : <App />}</React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{isWeekPlanner ? <WeekPlanner /> : <App />}<UndoNotice/></React.StrictMode>);

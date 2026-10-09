@@ -1,5 +1,9 @@
 # AI Task Manager Requirements
 
+## Approved usability revision
+
+Three main pages: Tasks (today first, then deadline; previous unfinished plans visible; fixed appointments inline), Assistant (three mode buttons), Knowledge Library (topic documents and legacy notes in one searchable list). No standalone job-application/hard-schedule/waiting panels, no deletion of their data. Topic title, subject/category and SOP/skill/note kind are editable. Preserve sources and summary versions. Enter submits, Ctrl+Enter newlines, IME composition must not submit. Conversation, thought and task drafts stay distinct. Capture confirms durable save separately from organization. Global task questions do not inherit previously browsed topics. Single-item completion is the default and destructive user actions offer guarded undo. Widget, tray click, second launch and Ctrl+Alt+M open/focus the single main window; Ctrl+Alt+A still opens the planner.
+
 ## Accepted extension (2026-10-08; supersedes earlier manual-only AI scope)
 
 Windows local assistant: preserve each thought verbatim; group thoughts into topics; show a versioned, source-linked organized view by default. Batch changed topics after two idle minutes and recover pending work on startup. Automatic organization is a persisted opt-in; AI off performs no model calls. API key continues to use existing settings. Cloud processing disclosure appears beside the control.

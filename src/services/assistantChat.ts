@@ -5,6 +5,7 @@ import { listPlanningTasks } from './tasks.js';
 import { listScheduleItems } from './personalOps.js';
 import { recommendNow } from './recommendation.js';
 import { getTaskDetails } from './taskDetails.js';
+import { dateCaption, timeBadge } from '../domain/timePresentation.js';
 
 export function conversationHistory(db: DatabaseSync) {
   return db.prepare('select * from (select * from assistant_messages order by id desc limit 40) order by id').all();
@@ -22,15 +23,21 @@ export async function askAssistant(db: DatabaseSync,input: { text: string; topic
   textValue(input.text,4000);
   if (input.minutes !== undefined && (!Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 1440)) throw new Error('可用时间应为 1–1440 分钟。');
   const prefs=assistantPreferences(db);
+  const listIntent=/(还有|哪些|什么|列出|所有|全部).*(没做|未完成|没完成|任务|待办)|未完成.*(任务|事项)/.test(input.text) && !/先做|优先|推荐|安排顺序/.test(input.text);
+  const priorityIntent=/先做|优先|推荐|做什么|安排顺序/.test(input.text);
+  const globalTasks=listIntent || priorityIntent;
   const allTasks=listPlanningTasks(db);
   const schedules=listScheduleItems(db).filter(s=>s.start_at && Date.parse(s.end_at ?? s.start_at)>=now.getTime()-86400000);
-  const topic=input.topicId ? getTopic(db,input.topicId) : null;
+  const topic=input.topicId && !globalTasks ? getTopic(db,input.topicId) : null;
   const thoughts=topic ? topicThoughts(db,topic.id) : [];
-  if (!prefs.aiEnabled || (!prefs.configured && model===assistantModel)) {
+  if (listIntent || !prefs.aiEnabled || (!prefs.configured && model===assistantModel)) {
     const recommended=recommendNow(db,{now:now.toISOString(),availableMinutes:input.minutes}).slice(0,3);
-    const answer=topic
+    const answer=listIntent
+      ? `未完成任务共 ${allTasks.length} 项：\n${allTasks.map((t,i)=>`${i+1}. ${t.title}${t.deadline_at?` · ${timeBadge(t.deadline_at,'deadline',now).label}`:''}${t.start_at?` · 计划 ${dateCaption(t.start_at)}`:''}${t.status==='waiting'?' · 等待中':''}`).join('\n')||'目前没有未完成任务。'}`
+      : topic
       ? `本地模式：以下是主题“${topic.title}”的已保存整理稿${topic.dirty_at ? '（有新内容尚未整理）' : ''}。\n${topic.summary || '尚无整理稿，请查看原始记录。'}`
-      : `本地推荐（未调用 AI；按已有截止时间和优先级排序，未推断任务依赖或设备条件）：\n${recommended.map((r,i)=>`${i+1}. ${r.task.title}${r.task.deadline_at ? `，截止 ${r.task.deadline_at}` : '，未设置截止时间'}${r.task.estimated_minutes ? `，预计 ${r.task.estimated_minutes} 分钟` : '，耗时未知'}`).join('\n') || '目前没有符合条件的任务。'}\n${schedules.slice(0,5).map(s=>`固定日程：${s.title} ${s.start_at}`).join('\n')}\n具体安排请结合固定日程；开启 AI 后可进行自然语言追问。`;
+      : priorityIntent ? `本地推荐（按已有截止时间和优先级，未推断依赖）：\n${recommended.map((r,i)=>`${i+1}. ${r.task.title}${r.task.deadline_at ? `，${timeBadge(r.task.deadline_at,'deadline',now).label}` : '，未设置截止时间'}${r.task.estimated_minutes ? `，预计 ${r.task.estimated_minutes} 分钟` : '，耗时未知'}`).join('\n') || '目前没有符合条件的任务。'}\n${schedules.slice(0,5).map(s=>`日程：${s.title} ${dateCaption(s.start_at)}`).join('\n')}\n开启 AI 后可结合更多背景讨论。`
+      : '本地模式可以列出未完成任务、推荐先做什么，或查看选中的知识笔记。这个问题需要开启 AI 才能进一步回答。';
     storeExchange(db,input.text,answer);
     return {answer,provider:'local',references:[]};
   }

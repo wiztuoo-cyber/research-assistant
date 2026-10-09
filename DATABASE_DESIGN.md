@@ -308,6 +308,10 @@ Then rank by:
 - estimated time fit
 - repeated postponement
 
+## Usability extension (migration 0008)
+
+Adds topic category and kind (note/skill/sop), preserving existing topics as notes. ui_undo stores expiring before/after snapshots; service undo rejects intervening edits. Source moves dirty both topics. Original captures and knowledge remain intact.
+
 ## Migration rules
 
 - Every schema change gets a migration file.

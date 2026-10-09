@@ -17,7 +17,7 @@ describe('topic sources and versions',()=>{
   it('TC-TOPIC-001 migrates an old database without changing its tasks',()=>{
     const db=openDatabase(':memory:');
     db.exec('create table schema_migrations(id text primary key,applied_at text not null)');
-    for(const m of migrations.filter(m=>m.id!=='0007_topic_assistant')){db.exec(m.sql);db.prepare('insert into schema_migrations values(?,?)').run(m.id,now);}
+    for(const m of migrations.filter(m=>m.id<'0007')){db.exec(m.sql);db.prepare('insert into schema_migrations values(?,?)').run(m.id,now);}
     const task=createTask(db,{title:'旧任务'});
     runMigrations(db);
     expect(db.prepare('select title from tasks where id=?').get(task.id)?.title).toBe('旧任务');

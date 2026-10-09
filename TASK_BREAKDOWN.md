@@ -1,5 +1,14 @@
 # Task Breakdown
 
+## 2026-10-08: Confirmed usability redesign
+
+Status: Implemented; automated coverage passed. Windows shell interactions and live model quality require manual acceptance.
+
+- TASK-0801: Three pages, explicit capture modes, Enter submission with IME guard, knowledge library and editable topic metadata. TC-UX-001..003.
+- TASK-0802: Local-day countdowns, previous unfinished plans, read-only query intent, single-task completion and guarded undo. TC-UX-004..006.
+- TASK-0803: Main-window entry from widget, tray, second instance and Ctrl+Alt+M with collision notice. TC-UX-007.
+- User approved implementation after reviewing the interaction proposal. One consolidated remote update; GitHub builds the installer.
+
 ## 2026-10-08: Personal assistant expansion
 
 - TASK-0701: Topic captures, immutable originals, versioned summaries, corrections and restore. Acceptance: TC-TOPIC-001..005.
