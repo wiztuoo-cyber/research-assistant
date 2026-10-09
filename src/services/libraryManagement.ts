@@ -1,3 +1,6 @@
+import {knowledgeCards} from '../domain/knowledgeCards.js';
+import {textValue} from './assistantModel.js';
+import {updateKnowledgeItem} from './personalOps.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {getTopic,topicThoughts} from './topics.js';
 import {randomUUID} from 'node:crypto';
@@ -27,4 +30,16 @@ export function undoMerge(db:DatabaseSync,item:Record<string,unknown>){
     db.prepare('update thought_topics set dirty_at=?,revision=? where id=?').run(before.target.dirty_at,before.target.revision,before.target.id);
     db.prepare('delete from ui_undo where id=?').run(String(item.id));db.exec('COMMIT');return {ok:true};
   }catch(e){db.exec('ROLLBACK');throw e;}
+}
+
+export function moveKnowledgeCard(db:DatabaseSync,input:{kind:string;id:string;index?:number;revision?:number;category:string}){
+ const category=textValue(input.category,100).trim();
+ if(input.kind==='legacy')return updateKnowledgeItem(db,textValue(input.id,100),{category});
+ if(input.kind!=='topic')throw new Error('卡片类型无效');
+ const topic=getTopic(db,input.id);if(topic.revision!==input.revision)throw new Error('笔记已更新，请刷新后再拖动');
+ const points=knowledgeCards(topic),index=input.index;
+ if(!Number.isInteger(index)||index!<0||index!>=points.length)throw new Error('卡片不存在');
+ points[index!]={...points[index!],category,categoryLocked:true};
+ db.prepare('update thought_topics set points_json=?,revision=revision+1 where id=?').run(JSON.stringify(points),topic.id);
+ return {ok:true};
 }

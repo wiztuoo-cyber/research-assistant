@@ -1,3 +1,4 @@
+import {listReviews,getReview,startReview,respondReview,saveReview,exportReview} from '../services/reviews.js';
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
@@ -10,11 +11,17 @@ import { copyKnowledgeToTopic } from '../services/topics.js';
 import { undoable } from '../services/undo.js';
 import {saveImage,extractImage} from '../services/knowledgeSources.js';
 import {visionSettings,saveVisionSettings} from '../services/settings.js';
-import {mergeTopics} from '../services/libraryManagement.js';
+import {mergeTopics,moveKnowledgeCard} from '../services/libraryManagement.js';
 
 export function assistantRoutes(db: DatabaseSync) {
   const router=Router();
   const wrap=(fn:(req:Request,res:Response)=>unknown)=>(req:Request,res:Response,next:NextFunction)=>{Promise.resolve().then(()=>fn(req,res)).catch(next);};
+  router.get('/reviews',wrap((_req,res)=>res.json(listReviews(db))));
+  router.post('/reviews',wrap((req,res)=>res.json(startReview(db,req.body))));
+  router.get('/reviews/:id',wrap((req,res)=>res.json(getReview(db,String(req.params.id)))));
+  router.post('/reviews/:id/respond',wrap(async(req,res)=>res.json(await respondReview(db,String(req.params.id),req.body))));
+  router.patch('/reviews/:id',wrap((req,res)=>res.json(saveReview(db,String(req.params.id),req.body))));
+  router.post('/reviews/:id/export',wrap((req,res)=>res.json(exportReview(db,String(req.params.id),req.body))));
   router.get('/vision',wrap((_req,res)=>res.json(visionSettings())));
   router.post('/vision',wrap((req,res)=>res.json(saveVisionSettings(req.body))));
   router.post('/images',wrap((req,res)=>res.status(201).json(saveImage(db,req.body.dataUrl))));
@@ -22,6 +29,7 @@ export function assistantRoutes(db: DatabaseSync) {
   router.get('/images/:id',wrap((req,res)=>{const row=db.prepare('select mime,data from knowledge_images where id=?').get(String(req.params.id));if(!row){res.sendStatus(404);return;}res.set('content-type',String(row.mime)).set('X-Content-Type-Options','nosniff').send(Buffer.from(String(row.data),'base64'));}));
   router.get('/state',wrap((_req,res)=>res.json({preferences:assistantPreferences(db),topics:listTopics(db),unassigned:topicThoughts(db,null),messages:conversationHistory(db)})));
   router.patch('/preferences',wrap((req,res)=>res.json(setAssistantPreferences(db,req.body))));
+  router.post('/cards/move',wrap((req,res)=>{const kind=req.body.kind==='legacy'?'knowledge':'card';res.json(undoable(db,kind,String(req.body.id),()=>moveKnowledgeCard(db,req.body)));}));
   router.post('/topics',wrap((req,res)=>res.status(201).json(createTopic(db,req.body.title))));
   router.post('/topics/:id/merge',wrap((req,res)=>res.json(mergeTopics(db,String(req.params.id),String(req.body.targetId)))));
   router.post('/import-knowledge/:id',wrap((req,res)=>res.json(copyKnowledgeToTopic(db,String(req.params.id)))));

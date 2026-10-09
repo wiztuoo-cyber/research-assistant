@@ -110,7 +110,8 @@ function App() {
   const [libraryTopic,setLibraryTopic]=useState(''),[libraryKey,setLibraryKey]=useState(0);
   const [question,setQuestion]=useState(''),[chatTopic,setChatTopic]=useState(''),[questionKey,setQuestionKey]=useState(0);
   function openLibrary(id:string){setLibraryTopic(id);setLibraryKey(k=>k+1);setPage('library');}
-  function ask(text:string,topic=''){setChatTopic(topic);setQuestion(text);setQuestionKey(k=>k+1);setPage('assistant');}
+  const [chatReviewTask,setChatReviewTask]=useState('');
+  function ask(text:string,topic='',reviewTask=''){setChatReviewTask(reviewTask);setChatTopic(topic);setQuestion(text);setQuestionKey(k=>k+1);setPage('assistant');}
   useEffect(()=>{const fn=()=>void refresh();window.addEventListener('assistant-changed',fn);return()=>window.removeEventListener('assistant-changed',fn);},[]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -331,7 +332,7 @@ function App() {
       {message ? <div className="status-line">{message}</div> : null}
 
       <nav className="main-tabs" aria-label="主导航">{([['tasks','任务'],['assistant','助理'],['library','知识库']] as const).map(([id,label])=><button key={id} aria-current={page===id?'page':undefined} onClick={()=>setPage(id)}>{label}</button>)}</nav>
-      <div hidden={page!=='assistant'}><AssistantPanel key={questionKey} initialQuestion={question} initialTopic={chatTopic} onOpenTopic={openLibrary}/></div>
+      <div hidden={page!=='assistant'}><AssistantPanel key={questionKey} initialQuestion={question} initialReviewTask={chatReviewTask} initialTopic={chatTopic} onOpenTopic={openLibrary}/></div>
       <div hidden={page!=='library'}><AssistantPanel key={libraryKey} view="library" initialTopic={libraryTopic} legacy={knowledgeItems} onOpenLegacy={openKnowledge} onAsk={(id,title)=>ask('帮我梳理“'+title+'”这篇笔记的要点与未明确的问题',id)}/></div>
       <div hidden={page!=='tasks'} className="task-page">
         <header className="page-heading"><div><h2>待办事项 <small>{tasks.length}</small></h2><p>安排今天，也看清接下来。</p></div><div className="assistant-controls"><button onClick={()=>{setPage('assistant');window.dispatchEvent(new Event('assistant-record-task'));}}>＋添加事项</button><button onClick={()=>void api<{supported:boolean}>('/api/desktop/open-planner',{method:'POST'}).then(r=>{if(!r.supported)window.open('/?view=week','_blank');}).catch(e=>setMessage(String(e)))}>打开周挂件</button></div></header>
@@ -437,6 +438,7 @@ function App() {
               <button className="icon-button" type="button" onClick={() => setSelectedTask(null)}><X size={18}/></button>
             </div>
 
+            <button onClick={()=>{ask('复盘：'+selectedTask.task.title,'',selectedTask.task.id);setSelectedTask(null);}}>复盘这件事</button>
             <TaskDateEditor key={selectedTask.task.id} task={selectedTask.task} onSaved={()=>{void openTask(selectedTask.task.id);void refresh();}}/>
             <section className="drawer-section">
               <h3>子任务</h3>

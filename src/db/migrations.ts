@@ -373,7 +373,14 @@ export const migrations: Migration[] = [
         position real not null default 0
       );
     `
-  }
+  },
+  {id:'0010_reviews',sql:`
+    create table reviews (id text primary key,request_id text unique,title text not null,scope text not null,task_id text,
+      context_json text not null,messages_json text not null,draft_json text not null,
+      revision integer not null default 0,status text not null default 'draft',created_at text not null,updated_at text not null);
+    create table review_exports (review_id text not null references reviews(id),kind text not null,item_id text not null,primary key(review_id,kind));
+  `}
+
 ];
 
 export function ensureMigrationTable(db: DatabaseSync): void {

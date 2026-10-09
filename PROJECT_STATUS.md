@@ -2,6 +2,16 @@
 
 Last updated: 2026-10-09
 
+## v0.2.11 review workflow and seven-day rows
+
+TASK-0913..0915 / TC-0913..0915 implemented. Week widget keeps all unfinished tasks left and renders seven horizontal weekday rows right, including empty dates; week navigation, today highlighting, dot/color/cross-day badges, native drag-to-plan, completion and details retained. Rescheduling preserves deadlines and existing task time.
+
+Knowledge library has only search in its toolbar, no new-category/new-note/record-thought buttons. Legacy and current cards share category groups. Individual cards can be dragged into existing categories with guarded undo. Old content is not automatically migrated or rewritten. Manual point category locks survive later AI organization; conflicting locked categories preserve the previous version with an explicit error rather than overwriting classification.
+
+Assistant supports event/task and current-week reviews, task-detail entry, separate review history, bounded task/note snapshots, previous relevant reviews, short AI followups and editable review cards. Without AI, user descriptions are retained without invented reasons. Saving review, saving experience and creating a task are separate actions. Explicit exports and review creation are idempotent; revisions guard concurrent AI responses/edits. Saved reviews are retrievable in subsequent AI answers. Migration 0010 adds reviews and export links; originals retained. No scheduled/background review generation was added.
+
+Validation: 81 service/unit/API tests and 11 Edge E2E flows; lint, db:check and build pass. Visual review of seven rows and review screen completed. Real model quality and native installed Windows behavior require user acceptance; cloud packaging tracked by PR #2.
+
 ## v0.2.10 corrections
 
 TASK-0910 / TC-0910..0912: independent knowledge cards grouped by category, map removed. Existing structured points each display separately without rewriting originals. Card title/body/category/subcategory edits create guarded versions, preserve other points and source links, and pause AI rewriting. AI now receives atomic-point instructions and existing card titles for semantic reuse; actual model classification quality remains provider-dependent. Legacy manual prose without structured points remains one readable card until explicitly reorganized. Originals/history and screenshot provenance retained.
@@ -212,3 +222,7 @@ Known issues:
 - `src/web/*`
 - `src/cli.ts`
 - `tests/**/*`
+
+### v0.2.10 final cloud verification
+
+Commit 1d1059564c7ce8f16c6c976fc49ca803a6c44c37: CI run 37884163461 passed (including Chromium E2E); Windows build 37884163456 passed. Artifact personal-assistant-windows, ID 11596005427, matches this commit. Installer was not installed locally; user downloads and updates. This verification note is local session bookkeeping after the packaged commit.

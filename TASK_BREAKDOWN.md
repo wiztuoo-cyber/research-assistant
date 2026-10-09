@@ -324,3 +324,8 @@ Deliverables:
 
 - Tailscale access note.
 - Manual verification result.
+
+## TASK-0913..0915: v0.2.11 approved workflow
+- TASK-0913 / TC-0913: seven horizontal weekday rows, all days including empty ones, existing left tasks, week navigation, drop-to-plan preserves deadlines and time, dot/bar colors and completion/details retained.
+- TASK-0914 / TC-0914: remove new-note toolbar, group old and new cards together, drag individual card into existing category with undo and concurrent-edit guard; old content remains manual-only. No new-category or record-thought toolbar buttons.
+- TASK-0915 / TC-0915: assistant conversational event/weekly review with task facts, bounded relevant notes, short optional followups, editable saved review, separate history, explicit idempotent knowledge/task export, reuse saved reviews in future answers. Local fallback must not invent causes. Migration for reviews, no destructive changes.

@@ -312,3 +312,6 @@ Codex 适合帮助写入和读取本地 SQLite，但它不是长期后台服务�
 
 ## v0.2.10 corrections (TASK-0910)
 Independent knowledge cards under category headings replace maps and combined prose. Distinct points remain separate; duplicates retain all sources. Cards open individually and support editing. Existing raw records/history remain intact. Restore week widget all unfinished tasks on left, weekly calendar on right with persisted adjustable split. Remove task-list date controls. Click detail title to edit, Enter saves, Escape cancels, blank rejected, other fields preserved.
+
+## v0.2.11 / TASK-0913..0915
+Approved: seven rows instead of seven columns in week widget; retain all-task left pane. Drag knowledge cards into existing categories, preserve manual classification and old content, no new-category/record-thought/new-note toolbar. Reviews use existing assistant, event or current-week scope, auto-collected facts and user-supplied outcomes, editable saved cards, optional explicit save-as-knowledge and add-task; history separate from knowledge.

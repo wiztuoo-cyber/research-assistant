@@ -596,3 +596,6 @@ E2E: unplanned and future-week tasks both visible left; drag changes plan only a
 E2E: no inline date inputs; click detail title, reject blank, Escape cancel, Enter/save update both surfaces; verify deadline and steps unchanged.
 ## TC-0912: independent knowledge cards
 Service/unit: old structured points converted to independent cards without data loss, manual point edit preserves other points/source IDs and versions; AI prompt requests atomic points. E2E: no map, category grouping, open one point without unrelated content, edit card and verify persistence; source and history flows retained.
+
+## TC-0913..0915 verification plan
+Service tests: card move and undo retain body/sources, reject stale revisions; review task/week snapshots, local factual fallback, mocked AI followups and valid JSON, revision protection, persistence and idempotent exports, no task/knowledge creation without action. E2E: seven rows including empty dates and navigation, drag task preserves deadline; drag old/new card across category and undo; start review from assistant/task, respond, edit/save/reopen, export explicitly. Regression: lint, test, db:check, build, E2E.

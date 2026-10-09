@@ -331,3 +331,7 @@ Before destructive migrations:
 - Export key tables to JSON.
 - Run migration on a test database first.
 
+
+
+## v0.2.11 review storage (0010_reviews)
+reviews stores idempotent creation request ID, scope/task link, immutable collected context, conversation, editable draft, revision/status and timestamps. review_exports records unique review/kind to prevent duplicate task or experience creation. Manual card classification uses existing versioned point JSON category/categoryLocked fields, with guarded undo; legacy categories remain in knowledge_items.
