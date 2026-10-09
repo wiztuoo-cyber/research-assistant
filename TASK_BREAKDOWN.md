@@ -334,3 +334,5 @@ Deliverables:
 Create persistent empty categories from bottom of sticky sidebar, rename with transactional reassignment preserving content/sources; reject blank/duplicate target names. Existing implicit categories included with counts. Sidebar lists all categories, click scrolls without filtering, scrolling highlights current section, drag onto directory reuses guarded card-move/undo. Test service persistence/rename/validation and E2E create empty/reload/drop/undo/rename/navigation. No new top toolbar creation buttons.
 
 ## TASK-0917 / TC-0917: manual category deletion via menu; empty deletes immediately; nonempty requires destination and transfers cards transactionally. Preserve raw sources and other categories. No AI deletion capability.
+
+## TASK-0918 / TC-0918: explicitly categorized capture creates raw card immediately without AI; repair stranded category-hinted captures on startup; pending thoughts support manual category assignment; manual AI classification runs now independent of auto switch and returns errors/results.

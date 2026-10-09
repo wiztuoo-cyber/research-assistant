@@ -238,3 +238,9 @@ Commit 1a7a78cacba407bfeb07d51505350f39e67fcda0: CI 37904564597 and Windows buil
 
 ### v0.2.13 / TASK-0917 / TC-0917
 Manual category deletion implemented in category service, DELETE route, and sidebar menu. Empty categories delete directly. Populated categories require an existing destination; transaction transfers legacy and individual topic cards, preserves sibling points, content and sources, and carries manual classification locks. Missing/stale targets and newly populated empty categories reject safely. No AI deletion tool added. Sidebar keeps forms visible while category names scroll. Checks: lint, 83 tests, 13 Edge E2E, db:check and production build passed; deletion screen inspected. Cloud packaging pending.
+
+### v0.2.13 final cloud verification
+Commit a291d1bc615f9bc594fd83ff87ada14a769e7ce0: CI 37907882539 and Windows build 37907882535 succeeded. No local installer installation. Local bookkeeping after packaged commit.
+
+### v0.2.14 / TASK-0918 / TC-0918
+Fixed explicit category capture: creates a source-linked readable raw card immediately with AI off; no classification dependency. Startup recovers prior category-hinted unassigned captures idempotently. Pending thoughts offer direct category selection and drag to category. Manual AI classification now executes immediately without auto-organize/debounce requirements, with concurrency lock and explicit missing-config/API/size/result messages. Successful inferred assignments show raw cards immediately. UI explains classification versus content organization and preserves raw originals. Validation: 86 service/API tests, 14 Edge E2E, lint, db:check and build passed. AI semantic quality depends on provider; real external calls not made by tests. Cloud packaging pending.

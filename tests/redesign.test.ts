@@ -13,8 +13,8 @@ import {createScheduleItem} from '../src/services/personalOps.js';
 describe('v0.2.9 accepted flows',()=>{
  it('TC-0902 creates a new category and topic; explicit category wins',async()=>{const {db,close}=createTestDb();try{
   setAssistantPreferences(db,{aiEnabled:true,autoOrganize:true});const t=captureThought(db,{text:'健身训练心得',category:'健康'},'2026-10-01T00:00:00Z');
-  await runTopicSweep(db,async()=>({assignments:[{id:t.id,newTitle:'力量训练',category:'其他'}]}),'2026-10-01T00:03:00Z');
-  const row=db.prepare('select * from thought_topics').get()!;expect(row.category).toBe('健康');expect(row.title).toBe('力量训练');
+  await runTopicSweep(db,async()=>({points:[{kind:'idea',title:'力量训练',text:'健身训练心得',sourceIds:[t.id]}]}),'2026-10-01T00:03:00Z');
+  const row=db.prepare('select * from thought_topics').get()!;expect(row.category).toBe('健康');expect(JSON.parse(String(row.points_json))[0]).toMatchObject({title:'力量训练',category:'健康'});
  }finally{close();}});
  it('TC-0902 merged claim retains both sources and chapter',async()=>{const {db,close}=createTestDb();try{
   setAssistantPreferences(db,{aiEnabled:true});const topic=createTopic(db,'专业选择');const a=captureThought(db,{text:'A认为机械就业机会多',topicId:topic.id,sourceTitle:'帖子A',sourceUrl:'https://example.com/a'}),b=captureThought(db,{text:'B认为机械适合考公',topicId:topic.id,sourceTitle:'帖子B'});

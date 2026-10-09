@@ -3,7 +3,7 @@ import {listReviews,getReview,startReview,respondReview,saveReview,exportReview}
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
-import { assistantPreferences, setAssistantPreferences, listTopics, createTopic, captureThought, topicDetail, topicThoughts, moveThought, editTopic, organizeTopic, retryClassification } from '../services/topics.js';
+import { assistantPreferences, setAssistantPreferences, listTopics, createTopic, captureThought, topicDetail, topicThoughts, moveThought, editTopic, organizeTopic, retryClassification, assignThoughtCategory } from '../services/topics.js';
 import { askAssistant, conversationHistory } from '../services/assistantChat.js';
 import { aiCapture } from '../services/aiCapture.js';
 import { createTask } from '../services/tasks.js';
@@ -45,7 +45,8 @@ export function assistantRoutes(db: DatabaseSync) {
     if (req.body.topicId !== null && typeof req.body.topicId!=='string') throw new Error('请选择目标主题。');
     res.json(undoable(db,'thought',String(req.params.id),()=>{moveThought(db,String(req.params.id),req.body.topicId);return {ok:true};}));
   }));
-  router.post('/classify/retry',wrap((_req,res)=>{retryClassification(db);res.json({ok:true});}));
+  router.post('/classify/retry',wrap(async(_req,res)=>res.json(await retryClassification(db))));
+  router.post('/thoughts/:id/category',wrap((req,res)=>res.json(assignThoughtCategory(db,String(req.params.id),req.body.category))));
   router.post('/chat',wrap(async(req,res)=>res.json(await askAssistant(db,req.body))));
   router.post('/capture',wrap(async(req,res)=>{
     const text=textValue(req.body.text,4000);
