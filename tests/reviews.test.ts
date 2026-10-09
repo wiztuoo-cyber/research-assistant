@@ -20,6 +20,7 @@ describe('v0.2.11 reviews and manual classification',()=>{
   setAssistantPreferences(db,{aiEnabled:true});const t=createTopic(db,'混合笔记'),a=captureThought(db,{text:'根据岗位改简历',topicId:t.id});
   const model=async()=>({points:[{kind:'idea',title:'简历匹配',text:'根据岗位改简历',sourceIds:[a.id]}]});await organizeTopic(db,t.id,model);
   moveKnowledgeCard(db,{kind:'topic',id:t.id,index:0,revision:getTopic(db,t.id).revision,category:'秋招'});await organizeTopic(db,t.id,model);expect(JSON.parse(getTopic(db,t.id).points_json)[0].category).toBe('秋招');expect(getTopic(db,t.id).paused).toBe(0);
+  const pending=createTopic(db,'待整理笔记'),raw=captureThought(db,{text:'新想法',topicId:pending.id});moveKnowledgeCard(db,{kind:'topic',id:pending.id,index:0,revision:getTopic(db,pending.id).revision,category:'我的分类'});await organizeTopic(db,pending.id,async()=>({points:[{kind:'idea',text:'整理后的新想法',sourceIds:[raw.id]}]}));expect(JSON.parse(getTopic(db,pending.id).points_json)[0].category).toBe('我的分类');
  }finally{close();}});
  it('TC-0915 snapshot, local fallback, explicit exports are idempotent',async()=>{const {db,close}=createTestDb();try{
   const task=createTask(db,{title:'面试准备',startAt:'2026-10-09',deadlineAt:'2026-10-10'});const r=startReview(db,{title:'面试复盘',taskId:task.id,requestId:'review-once'},new Date('2026-10-09T12:00:00+08:00'));expect(startReview(db,{title:'面试复盘',taskId:task.id,requestId:'review-once'}).id).toBe(r.id);updateTaskFields(db,task.id,{title:'已改名'});expect(getReview(db,r.id).context.tasks[0].title).toBe('面试准备');

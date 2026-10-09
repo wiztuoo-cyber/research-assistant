@@ -39,7 +39,7 @@ export function moveKnowledgeCard(db:DatabaseSync,input:{kind:string;id:string;i
  const topic=getTopic(db,input.id);if(topic.revision!==input.revision)throw new Error('笔记已更新，请刷新后再拖动');
  const points=knowledgeCards(topic),index=input.index;
  if(!Number.isInteger(index)||index!<0||index!>=points.length)throw new Error('卡片不存在');
- points[index!]={...points[index!],category,categoryLocked:true};
+ points[index!]={...points[index!],sourceIds:points[index!].sourceIds.length?points[index!].sourceIds:topicThoughts(db,topic.id).map(t=>t.id),category,categoryLocked:true};
  db.prepare('update thought_topics set points_json=?,revision=revision+1 where id=?').run(JSON.stringify(points),topic.id);
  return {ok:true};
 }
