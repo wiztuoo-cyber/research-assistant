@@ -1,8 +1,9 @@
 import React, {useEffect,useState} from 'react';
+import {flushSync} from 'react-dom';
 export function captureKey(e:React.KeyboardEvent<HTMLTextAreaElement>,setText:(v:string)=>void) {
   if(e.key!=='Enter'||e.nativeEvent.isComposing||e.keyCode===229)return;
   e.preventDefault();
-  if(e.ctrlKey){const n=e.currentTarget,s=n.selectionStart;setText(n.value.slice(0,s)+'\n'+n.value.slice(n.selectionEnd));requestAnimationFrame(()=>n.setSelectionRange(s+1,s+1));}
+  if(e.ctrlKey){const n=e.currentTarget,s=n.selectionStart;flushSync(()=>setText(n.value.slice(0,s)+'\n'+n.value.slice(n.selectionEnd)));n.setSelectionRange(s+1,s+1);}
   else if(!e.repeat)e.currentTarget.form?.requestSubmit();
 }
 export function changed(data?:{undoToken?:string}) {
